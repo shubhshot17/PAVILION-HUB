@@ -73,6 +73,25 @@ backend/data/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+python-ai-service/.venv/
+python-ai-service/__pycache__/
+python-ai-service/**/*.py[cod]
+python-ai-service/.pytest_cache/
+python-ai-service/artifacts/
+
+# Capacitor / Android build outputs
+frontend/android/.gradle/
+frontend/android/build/
+frontend/android/app/build/
+frontend/android/local.properties
+frontend/android/capacitor-cordova-android-plugins/build/
+frontend/android/app/src/main/assets/public/
+frontend/android/app/src/main/assets/capacitor.config.json
+frontend/android/app/src/main/assets/capacitor.plugins.json
+# NEVER commit signing keys or passwords
+*.keystore
+*.jks
+keystore.properties
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

@@ -8,6 +8,7 @@ import scoringEventsRouter from './routes/scoringEvents.js'
 import teamsRouter from './routes/teams.js'
 import playersRouter from './routes/players.js'
 import tournamentsRouter from './routes/tournaments.js'
+import aiRouter from './routes/ai.js'
 
 const app = express()
 
@@ -27,6 +28,7 @@ app.use('/api/scoring-events', scoringEventsRouter)
 app.use('/api/teams', teamsRouter)
 app.use('/api/players', playersRouter)
 app.use('/api/tournaments', tournamentsRouter)
+app.use('/api/ai', aiRouter)
 
 app.use(notFound)
 app.use(errorHandler)

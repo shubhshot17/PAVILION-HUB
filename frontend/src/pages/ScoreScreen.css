@@ -174,6 +174,10 @@
   .score-controls__runs {
     grid-template-columns: repeat(4, 1fr);
   }
+  /* Bigger touch targets for phones */
+  .score-btn {
+    padding: 14px;
+  }
 }
 .score-btn {
   border: 1px solid rgba(198, 242, 78, 0.25);

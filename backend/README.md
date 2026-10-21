@@ -73,6 +73,8 @@ or deleted.
 - `GET|POST /api/matches`; `GET|PATCH|DELETE /api/matches/:id`
 - `GET /api/matches/:id/scorecard`
 - `GET|POST /api/scoring-events`; `GET /api/scoring-events/:id`
+- `POST /api/ai/win-probability`
+- `POST /api/ai/first-innings-score`
 
 Create a tournament and its teams before creating a match. Match requests
 continue to accept the existing `tournament`, `format`, `venue`, `date`,
@@ -123,7 +125,12 @@ Run tests with `npm test`.
 - `routes/resourceRoutes.js`, `app.js`, `server.js`: scorecard route,
   database-aware API startup, and health endpoint.
 - `middleware/errorHandler.js`: consistent database and HTTP error responses.
+- `controllers/aiController.js`, `routes/ai.js`: validated, timeout-bounded
+  server-side proxy for the separate Python prediction service.
 - `tests/persistence.test.js`: API integration and restart-persistence test.
+- `tests/aiProxy.test.js`: Node-to-AI proxy, validation, timeout, and failure tests.
 - `.gitignore`: local SQLite database and journal files.
 - `README.md`: database choice, schema, setup, persistence verification, and
   this changed-file guide.
+- `python-ai-service/`: isolated FastAPI/scikit-learn service, synthetic-only
+  training/evaluation pipeline, schemas, tests, and its README.

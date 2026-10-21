@@ -6,7 +6,7 @@
 
 .standings__row {
   display: grid;
-  grid-template-columns: 32px 1fr 40px 40px 40px 48px 64px;
+  grid-template-columns: 32px minmax(110px, 1fr) repeat(5, 40px) 50px 64px;
   align-items: center;
   gap: 4px;
   padding: 9px 8px;
@@ -78,7 +78,7 @@
 
 @media (max-width: 560px) {
   .standings__row {
-    grid-template-columns: 26px 1fr 32px 32px 32px 42px 56px;
+    grid-template-columns: 26px minmax(90px, 1fr) repeat(5, 30px) 44px 52px;
     font-size: 0.78rem;
   }
 

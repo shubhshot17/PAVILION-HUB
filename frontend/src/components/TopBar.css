@@ -3,11 +3,8 @@
   top: 0;
   left: 0;
   right: 0;
-  height: var(--topbar-h);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
+  height: calc(var(--topbar-h) + var(--safe-top));
+  padding: var(--safe-top) 20px 0;
   background: rgba(8, 28, 18, 0.9);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(198, 242, 78, 0.12);

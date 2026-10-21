@@ -11,8 +11,8 @@ import type { DashboardData } from "../types";
 import { CalendarIcon, BallIcon } from "../components/icons";
 import "./Dashboard.css";
 
-export function Dashboard() {
-  const [data, setData] = useState<DashboardData | null>(null);
+export function Dashboard({ onNavigate }: { onNavigate?: (page: string) => void }) {
+  const [data, setData] = useState<(DashboardData & { isDemo: boolean }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +45,7 @@ export function Dashboard() {
       {/* ---------- Welcome hero ---------- */}
       <section className="welcome">
         <div className="welcome__text">
-          <span className="welcome__eyebrow">Season 2026 · Demo workspace</span>
+          <span className="welcome__eyebrow">Season 2026 · {data.isDemo ? '⚠ Demo workspace' : 'Backend workspace'}</span>
           <h1>
             Welcome back to <span className="welcome__brand">PAVILION HUB</span>
           </h1>
@@ -78,12 +78,13 @@ export function Dashboard() {
         title="🔴 Live Matches"
         subtitle="Ball-by-ball scoring in progress"
         action={
-          <span
+          <button
+            type="button"
             className="section-link"
-            onClick={() => alert("Live Scores page (coming soon)")}
+            onClick={() => onNavigate?.("live")}
           >
             View all →
-          </span>
+          </button>
         }
       >
         {liveMatches.length === 0 ? (
@@ -181,12 +182,13 @@ export function Dashboard() {
         title="Tournament Standings"
         subtitle="Monsoon Premier Cup · League stage"
         action={
-          <span
+          <button
+            type="button"
             className="section-link"
-            onClick={() => alert("Tournaments page (coming soon)")}
+            onClick={() => onNavigate?.("tournaments")}
           >
             Full table →
-          </span>
+          </button>
         }
       >
         {standings.length === 0 ? (
@@ -201,8 +203,9 @@ export function Dashboard() {
       </SectionCard>
 
       <footer className="dashboard__footer">
-        <CalendarIcon size={14} /> All scores and statistics shown are sample
-        demo data — not real matches.
+        <CalendarIcon size={14} /> {data.isDemo
+          ? '⚠ Demo data — backend not connected. All scores are fictional.'
+          : 'Data loaded from the configured backend. Verify whether records are demo or production data.'}
       </footer>
     </div>
   );

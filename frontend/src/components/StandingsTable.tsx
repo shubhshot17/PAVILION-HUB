@@ -20,6 +20,8 @@ export function StandingsTable({
         <span role="columnheader">P</span>
         <span role="columnheader">W</span>
         <span role="columnheader">L</span>
+        <span role="columnheader">T</span>
+        <span role="columnheader">NR</span>
         <span role="columnheader">Pts</span>
         <span role="columnheader">NRR</span>
       </div>
@@ -40,6 +42,12 @@ export function StandingsTable({
           <span role="cell">{row.played}</span>
           <span role="cell">{row.won}</span>
           <span role="cell">{row.lost}</span>
+          <span role="cell" title={`Tied: ${row.tied ?? 0}, No results: ${row.noResult ?? 0}`}>
+            {row.tied ?? 0}
+          </span>
+          <span role="cell" title="No results">
+            {row.noResult ?? 0}
+          </span>
           <span className="standings__points" role="cell">
             {row.points}
           </span>

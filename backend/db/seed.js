@@ -31,6 +31,10 @@ database.transaction(() => {
       '2026-10-21T19:00:00Z', 'completed', 'Westport Rangers won by 4 runs'
     );
 
+    UPDATE matches
+    SET win_team_id = 'demo-team-rangers'
+    WHERE id = 'demo-match';
+
     INSERT OR IGNORE INTO match_teams (match_id, team_id, batting_order) VALUES
       ('demo-match', 'demo-team-rangers', 1),
       ('demo-match', 'demo-team-falcons', 2);

@@ -7,6 +7,8 @@ export type MatchStatus = 'live' | 'upcoming' | 'completed' | 'abandoned'
 
 export type MatchFormat = 'T20' | 'ODI' | 'Test' | 'T10'
 
+export type TournamentType = 'round_robin' | 'knockout' | 'round_robin_knockout'
+
 export interface TeamScore {
   teamId: string
   runs: number
@@ -18,6 +20,7 @@ export interface TeamScore {
 export interface Match {
   id: string
   tournament: string
+  tournamentId?: string
   format: MatchFormat
   venue: string
   date: string // ISO string, e.g. "2026-10-20T14:00:00"
@@ -29,6 +32,62 @@ export interface Match {
   currentInnings?: 0 | 1
   /** Short summary line, e.g. "Team A won by 5 wickets" */
   result?: string
+  isTie?: boolean
+  isAbandoned?: boolean
+  winTeamId?: string
+  playerOfTheMatchId?: string
+}
+
+export interface Scorecard {
+  match: Match
+  innings: {
+    innings: number
+    battingTeam: Team
+    bowlingTeam: Team
+    runs: number
+    wickets: number
+    legalBalls: number
+    battingFigures: {
+      playerId: string
+      name: string
+      runs: number
+      ballsFaced: number
+      fours: number
+      sixes: number
+      dismissal: string | null
+    }[]
+    bowlingFigures: {
+      playerId: string
+      name: string
+      legalBalls: number
+      runsConceded: number
+      wickets: number
+      wides: number
+      noBalls: number
+    }[]
+    events: ScoringEvent[]
+  }[]
+}
+
+export interface ScoringEvent {
+  id: string
+  matchId: string
+  innings: number
+  over: number
+  ball: number
+  runs: number
+  eventType: string
+  batterRuns: number
+  extraRuns: number
+  extrasType: string | null
+  legalBall: boolean
+  sequence: number
+  recordedAt: string
+  batterId?: string
+  bowlerId?: string
+  nonStrikerId?: string
+  wicketType?: string
+  playerOutId?: string
 }
 
 export interface Team {
@@ -36,6 +95,21 @@ export interface Team {
   name: string
   shortName: string
   color: string // accent color used for the team badge
+  city?: string
+  homeGround?: string
+  isDemo?: boolean
+}
+
+export interface Player {
+  id: string
+  teamId: string
+  name: string
+  role: 'batter' | 'bowler' | 'all-rounder' | 'wicket-keeper'
+  jerseyNumber?: number
+  battingStyle?: string
+  bowlingStyle?: string
+  isActive?: boolean
+  isDemo?: boolean
 }
 
 export interface Tournament {
@@ -44,6 +118,12 @@ export interface Tournament {
   season: string
   format: MatchFormat
   isActive: boolean
+  tournamentType?: TournamentType
+  oversPerInnings?: number
+  winPoints?: number
+  tiePoints?: number
+  noResultPoints?: number
+  isDemo?: boolean
 }
 
 export interface StandingRow {
@@ -53,9 +133,123 @@ export interface StandingRow {
   played: number
   won: number
   lost: number
-  drawn: number
+  tied: number
+  noResult: number
+  drawn?: number
   points: number
   netRunRate: number
+}
+
+export interface Fixture {
+  id: string
+  tournamentId: string
+  homeTeam: Team
+  awayTeam: Team
+  scheduledAt: string
+  venue: string
+  status: 'scheduled' | 'postponed' | 'cancelled' | 'completed'
+  stage: string
+  roundNumber: number
+  bracketSlot?: number | null
+  linkedMatchId?: string | null
+  isDemo?: boolean
+}
+
+export interface Registration {
+  id: string
+  tournamentId: string
+  teamId: string
+  teamName: string
+  shortName: string
+  color: string
+  isDemo?: boolean
+  status: 'registered' | 'withdrawn' | 'disqualified'
+  registeredAt: string
+}
+
+export interface BracketRound {
+  stage: string
+  matches: {
+    id: string
+    stage: string
+    roundNumber: number
+    bracketSlot?: number | null
+    scheduledAt: string
+    venue: string
+    homeTeam: { id: string; name: string; shortName: string }
+    awayTeam: { id: string; name: string; shortName: string }
+    status: string
+    matchStatus?: string
+    matchResult?: string
+    winTeamId?: string
+  }[]
+}
+
+export interface BattingStats {
+  innings: number
+  runs: number
+  balls: number
+  fours: number
+  sixes: number
+  highestScore: number
+  fifties: number
+  hundreds: number
+  average: number | null
+  strikeRate: number | null
+}
+
+export interface BowlingStats {
+  innings: number
+  balls: number
+  runs: number
+  wickets: number
+  wides: number
+  noBalls: number
+  economy: number | null
+  average: number | null
+}
+
+export interface PlayerStats {
+  player: Player
+  teamName: string
+  teamShort: string
+  teamColor: string
+  batting: BattingStats
+  bowling: BowlingStats
+  playerOfTheMatch: number
+  recentBatting: {
+    matchId: string
+    date: string
+    opponent: string
+    runs: number
+    balls: number
+    fours: number
+    sixes: number
+    dismissal?: string
+  }[]
+}
+
+export interface TeamProfile {
+  id: string
+  name: string
+  shortName: string
+  color: string
+  city?: string
+  homeGround?: string
+  isDemo?: boolean
+  players: Player[]
+  recentMatches: {
+    id: string
+    status: string
+    result?: string
+    date: string
+    isAbandoned: boolean
+    isTie: boolean
+    won: boolean
+    tournament: string
+    format: string
+    opponents: Team[]
+  }[]
 }
 
 export interface DashboardData {

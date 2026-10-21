@@ -124,10 +124,10 @@ export const DEMO_MATCHES: Match[] = [
 ]
 
 export const DEMO_STANDINGS: StandingRow[] = [
-  { teamId: 't1', teamName: 'Westport Rangers', shortName: 'WPR', played: 6, won: 5, lost: 1, drawn: 0, points: 10, netRunRate: 1.24 },
-  { teamId: 't2', teamName: 'Eastvale Falcons', shortName: 'EVF', played: 6, won: 4, lost: 2, drawn: 0, points: 8, netRunRate: 0.81 },
-  { teamId: 't4', teamName: 'Southridge Lions', shortName: 'SRL', played: 6, won: 3, lost: 3, drawn: 0, points: 6, netRunRate: 0.12 },
-  { teamId: 't3', teamName: 'Northgate Kings', shortName: 'NGK', played: 6, won: 2, lost: 4, drawn: 0, points: 4, netRunRate: -0.35 },
-  { teamId: 't6', teamName: 'Lakeside Storm', shortName: 'LKS', played: 6, won: 1, lost: 5, drawn: 0, points: 2, netRunRate: -0.92 },
-  { teamId: 't5', teamName: 'Harbor Titans', shortName: 'HBT', played: 6, won: 0, lost: 6, drawn: 0, points: 0, netRunRate: -1.57 },
+  { teamId: 't1', teamName: 'Westport Rangers', shortName: 'WPR', played: 6, won: 5, lost: 1, tied: 0, noResult: 0, points: 10, netRunRate: 1.24 },
+  { teamId: 't2', teamName: 'Eastvale Falcons', shortName: 'EVF', played: 6, won: 4, lost: 2, tied: 0, noResult: 0, points: 8, netRunRate: 0.81 },
+  { teamId: 't4', teamName: 'Southridge Lions', shortName: 'SRL', played: 6, won: 3, lost: 3, tied: 0, noResult: 0, points: 6, netRunRate: 0.12 },
+  { teamId: 't3', teamName: 'Northgate Kings', shortName: 'NGK', played: 6, won: 2, lost: 4, tied: 0, noResult: 0, points: 4, netRunRate: -0.35 },
+  { teamId: 't6', teamName: 'Lakeside Storm', shortName: 'LKS', played: 6, won: 1, lost: 5, tied: 0, noResult: 0, points: 2, netRunRate: -0.92 },
+  { teamId: 't5', teamName: 'Harbor Titans', shortName: 'HBT', played: 6, won: 0, lost: 6, tied: 0, noResult: 0, points: 0, netRunRate: -1.57 },
 ]

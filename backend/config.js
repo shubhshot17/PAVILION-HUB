@@ -26,4 +26,28 @@ const databasePath = process.env.DATABASE_PATH === ':memory:'
   ? ':memory:'
   : path.resolve(backendDirectory, process.env.DATABASE_PATH || './data/pavilion.sqlite')
 
-export const config = { port, frontendOrigin, databasePath, backendDirectory }
+const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://127.0.0.1:8000'
+let parsedAiServiceUrl
+try {
+  parsedAiServiceUrl = new URL(aiServiceUrl)
+  if (!['http:', 'https:'].includes(parsedAiServiceUrl.protocol)
+    || parsedAiServiceUrl.pathname !== '/' || parsedAiServiceUrl.search || parsedAiServiceUrl.hash) {
+    throw new Error()
+  }
+} catch {
+  throw new Error('AI_SERVICE_URL must be a valid HTTP or HTTPS origin')
+}
+
+const aiServiceTimeoutMs = Number(process.env.AI_SERVICE_TIMEOUT_MS || 3000)
+if (!Number.isInteger(aiServiceTimeoutMs) || aiServiceTimeoutMs < 100 || aiServiceTimeoutMs > 30000) {
+  throw new Error('AI_SERVICE_TIMEOUT_MS must be an integer between 100 and 30000')
+}
+
+export const config = {
+  port,
+  frontendOrigin,
+  databasePath,
+  backendDirectory,
+  aiServiceUrl: parsedAiServiceUrl.origin,
+  aiServiceTimeoutMs,
+}

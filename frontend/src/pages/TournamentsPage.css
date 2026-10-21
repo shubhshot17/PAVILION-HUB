@@ -1,0 +1,560 @@
+/* ============================================================
+   PAVILION HUB — TournamentsPage styles
+   ============================================================ */
+
+/* ── Page wrapper ─────────────────────────────────────────── */
+.t-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.t-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.t-page__title {
+  font-size: 1.6rem;
+}
+
+.t-page__subtitle {
+  color: var(--white-dim);
+  font-size: 0.88rem;
+  margin-top: 4px;
+}
+
+/* ── Tournament cards list ────────────────────────────────── */
+.t-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.t-card {
+  position: relative;
+  background: linear-gradient(180deg, var(--green-800), var(--green-900) 60%);
+  border: var(--card-border);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+  color: var(--white);
+  width: 100%;
+}
+
+.t-card:hover {
+  border-color: rgba(198, 242, 78, 0.45);
+  transform: translateY(-2px);
+}
+
+.t-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.t-card__name {
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.t-card__badges {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.t-card__meta {
+  display: flex;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--white-dim);
+  flex-wrap: wrap;
+}
+
+.t-card__arrow {
+  position: absolute;
+  bottom: 14px;
+  right: 16px;
+  font-size: 1.1rem;
+  color: var(--lime);
+  opacity: 0.6;
+}
+
+/* ── Badges ───────────────────────────────────────────────── */
+.t-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.t-badge--demo {
+  background: rgba(255, 180, 84, 0.18);
+  color: #ffb454;
+  border: 1px solid rgba(255, 180, 84, 0.35);
+}
+
+.t-badge--active {
+  background: var(--lime-soft);
+  color: var(--lime);
+  border: 1px solid rgba(198, 242, 78, 0.3);
+}
+
+.t-badge--inactive {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--white-dim);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ── Detail header ────────────────────────────────────────── */
+.t-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.t-detail__header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.t-back {
+  background: none;
+  border: none;
+  color: var(--lime);
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+}
+
+.t-back:hover {
+  opacity: 0.75;
+}
+
+.t-detail__name {
+  font-size: 1.5rem;
+}
+
+.t-detail__meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  color: var(--white-dim);
+  margin-top: 4px;
+}
+
+.t-detail__points-rules {
+  font-size: 0.8rem;
+  color: var(--white-dim);
+  margin-top: 6px;
+}
+
+.t-detail__points-rules strong {
+  color: var(--lime);
+}
+
+/* ── Tabs ─────────────────────────────────────────────────── */
+.t-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0;
+  flex-wrap: wrap;
+}
+
+.t-tab {
+  background: none;
+  border: none;
+  color: var(--white-dim);
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.t-tab:hover {
+  color: var(--white);
+}
+
+.t-tab--active {
+  color: var(--lime);
+  border-bottom-color: var(--lime);
+}
+
+/* ── Error ────────────────────────────────────────────────── */
+.t-error {
+  padding: 12px 16px;
+  background: rgba(255, 92, 92, 0.12);
+  border: 1px solid rgba(255, 92, 92, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--live-red);
+  font-size: 0.88rem;
+}
+
+/* ── Fixture list ─────────────────────────────────────────── */
+.fix-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fix-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--charcoal-soft);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s;
+}
+
+.fix-item:hover {
+  border-color: rgba(198, 242, 78, 0.3);
+}
+
+.fix-item__teams {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fix-item__badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: var(--green-950);
+  flex-shrink: 0;
+}
+
+.fix-item__vs {
+  font-size: 0.7rem;
+  color: var(--white-dim);
+}
+
+.fix-item__names {
+  font-size: 0.88rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fix-item__names em {
+  color: var(--white-dim);
+  font-style: normal;
+  margin: 0 4px;
+}
+
+.fix-item__info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 0.75rem;
+  color: var(--white);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.fix-item__venue {
+  color: var(--white-dim);
+}
+
+.fix-item__stage {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--lime);
+  background: var(--lime-soft);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.fix-item__status {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.fix-item__status--scheduled  { color: var(--white-dim); }
+.fix-item__status--completed  { color: var(--lime); }
+.fix-item__status--postponed  { color: #ffb454; }
+.fix-item__status--cancelled  { color: var(--live-red); }
+
+/* ── Registrations list ───────────────────────────────────── */
+.reg-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reg-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--charcoal-soft);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+}
+
+.reg-item__badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--green-950);
+  flex-shrink: 0;
+}
+
+.reg-item__name {
+  flex: 1;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.reg-item__status {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.reg-item__status--registered   { color: var(--lime);      background: var(--lime-soft); }
+.reg-item__status--withdrawn    { color: var(--white-dim); background: rgba(255,255,255,0.07); }
+.reg-item__status--disqualified { color: var(--live-red);  background: rgba(255,92,92,0.12); }
+
+/* ── Knockout bracket ─────────────────────────────────────── */
+.bracket {
+  display: flex;
+  gap: 24px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.bracket__round {
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bracket__stage {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--lime);
+  font-weight: 700;
+  margin: 0;
+}
+
+.bracket__matches {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bracket__match {
+  background: var(--charcoal-soft);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bracket__team {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.bracket__separator {
+  font-size: 0.65rem;
+  color: var(--white-dim);
+  text-transform: uppercase;
+}
+
+.bracket__meta {
+  margin-top: 4px;
+}
+
+.bracket__result {
+  font-size: 0.72rem;
+  color: var(--lime);
+}
+
+.bracket__date {
+  font-size: 0.72rem;
+  color: var(--white-dim);
+}
+
+/* ── Create form ──────────────────────────────────────────── */
+.t-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.t-form__title {
+  font-size: 1.1rem;
+  margin: 0 0 4px;
+}
+
+.t-form__label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--white-dim);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex: 1;
+}
+
+.t-form__row {
+  display: flex;
+  gap: 16px;
+}
+
+.t-form__input,
+.t-form__select {
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius-sm);
+  color: var(--white);
+  font-size: 0.95rem;
+  font-family: inherit;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+
+.t-form__input:focus,
+.t-form__select:focus {
+  outline: none;
+  border-color: var(--lime);
+}
+
+.t-form__select option {
+  background: var(--green-900);
+}
+
+.t-form__error {
+  color: var(--live-red);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.t-form__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* ── Buttons ──────────────────────────────────────────────── */
+.t-btn {
+  padding: 9px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.t-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.t-btn--primary {
+  background: var(--lime);
+  color: var(--green-950);
+}
+
+.t-btn--primary:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.t-btn--ghost {
+  background: rgba(255,255,255,0.07);
+  color: var(--white);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.t-btn--ghost:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .fix-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .fix-item__info {
+    align-items: flex-start;
+  }
+
+  .t-form__row {
+    flex-direction: column;
+  }
+
+  .bracket {
+    flex-direction: column;
+  }
+
+  .t-page__header {
+    flex-direction: column;
+  }
+}
+

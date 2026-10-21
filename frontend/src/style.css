@@ -34,6 +34,10 @@
   --topbar-h: 64px;
   --card-border: 1px solid rgba(198, 242, 78, 0.12);
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+
+  /* Android/iOS notch & gesture-bar insets (0px on desktop web) */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 * {
@@ -91,6 +95,18 @@ code {
   border-radius: 4px;
   background: var(--lime-soft);
   color: var(--lime);
+}
+
+/* Main content column: clears the fixed topbar and desktop sidebar */
+.app-shell__content {
+  padding: calc(var(--topbar-h) + var(--safe-top) + 20px) 20px
+    calc(20px + var(--safe-bottom));
+}
+
+@media (min-width: 901px) {
+  .app-shell__content {
+    margin-left: var(--sidebar-w);
+  }
 }
 
 /* Scrollbar (subtle, dark) */

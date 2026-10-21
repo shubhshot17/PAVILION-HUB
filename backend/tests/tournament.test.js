@@ -14,7 +14,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { test } from 'node:test'
+import { after, before, test } from 'node:test'
 
 const testDirectory = mkdtempSync(path.join(tmpdir(), 'pavilion-hub-tournament-test-'))
 const databasePath = path.join(testDirectory, 'test.sqlite')
@@ -25,15 +25,21 @@ const [{ default: app }, { database }] = await Promise.all([
   import('../db/database.js'),
 ])
 const { computeStandings } = await import('../lib/pointsEngine.js')
+let tournamentSequence = 0
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 
-const server = app.listen(0, '127.0.0.1')
-await new Promise((resolve, reject) => {
-  server.once('listening', resolve)
-  server.once('error', reject)
+let server
+let baseUrl
+
+before(async () => {
+  server = app.listen(0, '127.0.0.1')
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve)
+    server.once('error', reject)
+  })
+  baseUrl = `http://127.0.0.1:${server.address().port}/api`
 })
-const baseUrl = `http://127.0.0.1:${server.address().port}/api`
 
 async function req(endpoint, options = {}) {
   const response = await fetch(`${baseUrl}${endpoint}`, {
@@ -57,8 +63,10 @@ const patch = (body) => ({
 // ── Shared fixture setup ──────────────────────────────────────────────────────
 
 async function buildTournament() {
+  tournamentSequence += 1
+  const suffix = String(tournamentSequence)
   const tRes = await req('/tournaments', post({
-    name: 'Test Premier League',
+    name: `Test Premier League ${suffix}`,
     season: '2026',
     format: 'T20',
     isActive: true,
@@ -73,7 +81,11 @@ async function buildTournament() {
 
   // Create three teams
   const teams = []
-  for (const [name, shortName] of [['Alpha XI', 'AXI'], ['Beta Warriors', 'BWR'], ['Gamma Stars', 'GST']]) {
+  for (const [name, shortName] of [
+    [`Alpha XI ${suffix}`, `A${suffix}X`],
+    [`Beta Warriors ${suffix}`, `B${suffix}W`],
+    [`Gamma Stars ${suffix}`, `G${suffix}S`],
+  ]) {
     const t = await req('/teams', post({ name, shortName, color: '#ffffff' }))
     assert.equal(t.status, 201)
     teams.push(t.body)
@@ -177,7 +189,7 @@ test('team registration: register, duplicate rejection, withdrawal, re-register'
   // Duplicate registration should fail
   const dup = await req(`/tournaments/${tournament.id}/registrations`, post({ teamId: teams[0].id }))
   assert.equal(dup.status, 409)
-  assert.ok(dup.body.error.includes('already registered'))
+  assert.ok(dup.body.error.message.includes('already registered'))
 
   // Withdraw
   const regs = await req(`/tournaments/${tournament.id}/registrations`)
@@ -224,7 +236,7 @@ test('fixture scheduling validates registered teams', async () => {
     venue: 'Test Ground',
   }))
   assert.equal(unregd.status, 400)
-  assert.ok(unregd.body.error.includes('registered in the tournament'))
+  assert.ok(unregd.body.error.message.includes('registered in the tournament'))
 })
 
 test('points table: win = 2pts, loss = 0', async () => {
@@ -407,10 +419,12 @@ test('knockout bracket returns staged fixtures', async () => {
   assert.equal(bracket.body[0].matches.length, 1)
 })
 
-// ── cleanup ───────────────────────────────────────────────────────────────────
-
-await new Promise((resolve, reject) =>
-  server.close((err) => (err ? reject(err) : resolve())),
-)
-database.close()
-rmSync(testDirectory, { recursive: true, force: true })
+after(async () => {
+  if (server?.listening) {
+    await new Promise((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    )
+  }
+  database.close()
+  rmSync(testDirectory, { recursive: true, force: true })
+})
