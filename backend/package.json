@@ -1,0 +1,22 @@
+{
+  "name": "pavilion-hub-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "db:migrate": "node db/migrate.js",
+    "db:seed": "node db/seed.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "better-sqlite3": "^12.2.0",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0"
+  }
+}
