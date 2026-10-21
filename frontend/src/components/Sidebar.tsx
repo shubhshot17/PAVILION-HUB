@@ -21,6 +21,7 @@ export const NAV_ITEMS: AppNavItem[] = [
   { id: "teams", label: "Teams & Players", icon: "teams" },
   { id: "stats", label: "Statistics", icon: "stats" },
   { id: "ai", label: "AI Predictions", icon: "ai" },
+  { id: "score", label: "Score a Match (demo)", icon: "live" },
 ];
 
 const ICONS = {

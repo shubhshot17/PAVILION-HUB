@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { Dashboard } from "./pages/Dashboard";
+import { ScoreScreen } from "./pages/ScoreScreen";
 import "./App.css";
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
     teams: "Teams & Players",
     stats: "Statistics",
     ai: "AI Predictions",
+    score: "Scoring",
   };
 
   const navigate = (pageId: string) => {
@@ -40,6 +42,8 @@ function App() {
       <main className="app-shell__content">
         {activePage === "dashboard" ? (
           <Dashboard />
+        ) : activePage === "score" ? (
+          <ScoreScreen />
         ) : (
           <div className="app-shell__placeholder">
             <h2>{PAGE_TITLES[activePage]}</h2>
