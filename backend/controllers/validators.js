@@ -103,4 +103,62 @@ export function validateTournament(data) {
   if (typeof data.isActive !== 'boolean') {
     throw new HttpError(400, 'isActive must be a boolean')
   }
+  if (data.tournamentType !== undefined) {
+    enumValue(data, 'tournamentType', ['round_robin', 'knockout', 'round_robin_knockout'])
+  }
+  for (const field of ['oversPerInnings', 'winPoints', 'tiePoints', 'noResultPoints']) {
+    if (data[field] !== undefined && (!Number.isInteger(data[field]) || data[field] < 0)) {
+      throw new HttpError(400, `${field} must be a non-negative integer`)
+    }
+  }
+}
+
+export function validateFixture(data) {
+  objectBody(data)
+  requiredString(data, 'homeTeamId')
+  requiredString(data, 'awayTeamId')
+  requiredString(data, 'scheduledAt')
+  requiredString(data, 'venue')
+  if (Number.isNaN(Date.parse(data.scheduledAt))) {
+    throw new HttpError(400, 'scheduledAt must be a valid date string')
+  }
+  if (data.status !== undefined) {
+    enumValue(data, 'status', ['scheduled', 'postponed', 'cancelled', 'completed'])
+  }
+  if (data.roundNumber !== undefined && (!Number.isInteger(data.roundNumber) || data.roundNumber < 1)) {
+    throw new HttpError(400, 'roundNumber must be a positive integer')
+  }
+}
+
+export function validateMatchResult(data) {
+  objectBody(data)
+  if (data.isTie !== undefined && typeof data.isTie !== 'boolean') {
+    throw new HttpError(400, 'isTie must be a boolean')
+  }
+  if (data.isAbandoned !== undefined && typeof data.isAbandoned !== 'boolean') {
+    throw new HttpError(400, 'isAbandoned must be a boolean')
+  }
+  if (data.result !== undefined && (typeof data.result !== 'string' || !data.result.trim())) {
+    throw new HttpError(400, 'result must be a non-empty string when provided')
+  }
+}
+
+export function validateRegistration(data) {
+  objectBody(data)
+  requiredString(data, 'teamId')
+}
+
+export function validatePartnership(data) {
+  objectBody(data)
+  requiredString(data, 'batter1Id')
+  requiredString(data, 'batter2Id')
+  if (!Number.isInteger(data.wicketNumber) || data.wicketNumber < 1 || data.wicketNumber > 11) {
+    throw new HttpError(400, 'wicketNumber must be an integer between 1 and 11')
+  }
+  if (!Number.isInteger(data.runs) || data.runs < 0) {
+    throw new HttpError(400, 'runs must be a non-negative integer')
+  }
+  if (!Number.isInteger(data.balls) || data.balls < 0) {
+    throw new HttpError(400, 'balls must be a non-negative integer')
+  }
 }

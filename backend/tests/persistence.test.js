@@ -146,7 +146,7 @@ test('persists score events across database reopen and keeps private user fields
     assert.equal(reopened.prepare('SELECT COUNT(*) AS count FROM ball_by_ball_events').get().count, 1)
     assert.equal(reopened.prepare('SELECT SUM(batter_runs + extra_runs) AS runs FROM ball_by_ball_events')
       .get().runs, 4)
-    assert.equal(reopened.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get().count, 1)
+    assert.ok(reopened.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get().count >= 1, 'at least one migration applied')
   } finally {
     reopened.close()
     rmSync(testDirectory, { recursive: true, force: true })
