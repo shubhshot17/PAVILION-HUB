@@ -4,9 +4,12 @@ export function createResourceController({ store, validate }) {
   return {
     list(req, res) {
       const records = store.list()
-      res.status(200).json(req.query.matchId
+      const filtered = req.query.matchId
         ? records.filter((record) => record.matchId === req.query.matchId)
-        : records)
+        : req.query.teamId
+          ? records.filter((record) => record.teamId === req.query.teamId)
+          : records
+      res.status(200).json(filtered)
     },
     get(req, res) {
       const record = store.get(req.params.id)

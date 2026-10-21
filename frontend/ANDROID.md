@@ -102,26 +102,30 @@ behave differently here (see below).
 
 ## API URLs on a device
 
-The app currently ships demo data (no network calls), but the API layer in
-`frontend/src/services/api.ts` exports `API_BASE` for when the real backend is
-wired up. **Never hardcode `localhost`** — on the phone that address is the
-phone itself, not your development machine.
+Dashboard, Matches, Tournaments, and Teams & Players use the Node API when it
+is reachable, and fall back to clearly labeled demo data when it is not. The
+Scoring screen is still a separate local demo: it uses fictional teams and
+does not save its ball-by-ball events to the backend. Do not treat its scores
+as persisted match records. **Never hardcode `localhost`** in the API URL — on
+a physical phone that address means the phone itself, not your computer.
 
 Two supported approaches:
 
 1. **Same Wi-Fi, LAN IP (recommended for physical devices).** Create
    `frontend/.env.local` (git-ignored) with your computer's LAN IP, then
-   rebuild + resync:
+   rebuild + resync. Configure the backend's `FRONTEND_ORIGIN` to match the
+   Android WebView origin allowed by its exact-origin CORS policy:
    ```
    VITE_API_URL=http://192.168.1.50:3000/api
    ```
    Find the IP with `ipconfig` (IPv4 Address under Wi-Fi). The Node backend
-   must be listening and reachable; its CORS `FRONTEND_ORIGIN` must include
-   the app origin if credentials are involved.
-2. **Relative paths (default).** With `API_BASE = ''`, requests go to whatever
-   origin the WebView is served from. Combined with Capacitor's optional
-   `server.hostname` in `capacitor.config.ts`, this can point the app at the
-   backend host directly.
+   must be listening and reachable. CORS allows only its configured
+   `FRONTEND_ORIGIN`; configure the WebView origin explicitly instead of
+   relying on the browser-development default.
+2. **Same-origin reverse proxy.** Leave `VITE_API_URL` unset only when the
+   WebView's origin serves or reverse-proxies `/api` to the backend. A
+   `server.hostname` setting changes the WebView host name; it does not set
+   the API server address.
 
 Plain-HTTP LAN URLs work in debug builds. For release builds, use HTTPS.
 

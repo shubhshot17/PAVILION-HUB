@@ -47,36 +47,10 @@
   gap: 14px;
 }
 
-.topbar__demo-chip {
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #ffb454;
-  border: 1px solid rgba(255, 180, 84, 0.4);
-  background: rgba(255, 180, 84, 0.1);
-  padding: 3px 10px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-
 .topbar__season {
   font-size: 0.8rem;
   color: var(--white-dim);
   white-space: nowrap;
-}
-
-.topbar__avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--lime);
-  color: var(--green-950);
-  font-weight: 700;
-  font-size: 0.9rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 @media (max-width: 900px) {

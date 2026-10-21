@@ -519,6 +519,8 @@ export function TournamentsPage() {
     )
   }
 
+  const visibleTournaments = (tournaments ?? []).filter((tournament) => !tournament.isDemo)
+
   return (
     <div className="t-page">
       <div className="t-page__header">
@@ -555,7 +557,7 @@ export function TournamentsPage() {
         <SectionCard title="Loading…">
           <LoadingRows rows={4} />
         </SectionCard>
-      ) : tournaments.length === 0 ? (
+      ) : visibleTournaments.length === 0 ? (
         <SectionCard title="No tournaments">
           <EmptyState
             icon="🏆"
@@ -565,7 +567,7 @@ export function TournamentsPage() {
         </SectionCard>
       ) : (
         <div className="t-list">
-          {tournaments.map((t) => (
+          {visibleTournaments.map((t) => (
             <button
               key={t.id}
               className="t-card"
@@ -601,4 +603,3 @@ export function TournamentsPage() {
     </div>
   )
 }
-

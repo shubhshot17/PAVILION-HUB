@@ -43,6 +43,8 @@ function playerRecord(row) {
       ? { jerseyNumber: row.jersey_number } : {}),
     ...(row.batting_style ? { battingStyle: row.batting_style } : {}),
     ...(row.bowling_style ? { bowlingStyle: row.bowling_style } : {}),
+    isCaptain: Boolean(row.is_captain),
+    isWicketkeeper: Boolean(row.is_wicketkeeper),
     isActive: row.is_active !== undefined ? Boolean(row.is_active) : true,
     isDemo:   Boolean(row.is_demo),
   }
@@ -283,7 +285,7 @@ export function getTeamProfile(teamId) {
 
   const players = database.prepare(`
     SELECT id, team_id, name, role, jersey_number,
-           batting_style, bowling_style, is_active, is_demo
+           batting_style, bowling_style, is_captain, is_wicketkeeper, is_active, is_demo
     FROM players WHERE team_id = ? ORDER BY name
   `).all(teamId).map(playerRecord)
 
@@ -454,6 +456,31 @@ export function setMatchResult(matchId, data) {
   const match = database.prepare('SELECT * FROM matches WHERE id = ?').get(matchId)
   if (!match) return null
 
+  const matchTeamIds = database.prepare(
+    'SELECT team_id FROM match_teams WHERE match_id = ?',
+  ).all(matchId).map(({ team_id }) => team_id)
+  const isTie = data.isTie ?? Boolean(match.is_tie)
+  const isAbandoned = data.isAbandoned ?? Boolean(match.is_abandoned)
+  const winTeamId = data.winTeamId
+    ?? (isTie || isAbandoned ? null : match.win_team_id)
+
+  if (winTeamId && !matchTeamIds.includes(winTeamId)) {
+    throw new HttpError(400, 'winTeamId must reference a team in this match')
+  }
+  if (isTie && isAbandoned) {
+    throw new HttpError(400, 'A match cannot be both tied and abandoned')
+  }
+  if ((isTie || isAbandoned) && data.winTeamId) {
+    throw new HttpError(400, 'A tied or abandoned match cannot have a winning team')
+  }
+  if (data.playerOfTheMatchId) {
+    const player = database.prepare('SELECT team_id FROM players WHERE id = ?')
+      .get(data.playerOfTheMatchId)
+    if (!player || !matchTeamIds.includes(player.team_id)) {
+      throw new HttpError(400, 'playerOfTheMatchId must reference a player in this match')
+    }
+  }
+
   database.transaction(() => {
     database.prepare(`
       UPDATE matches SET
@@ -466,9 +493,9 @@ export function setMatchResult(matchId, data) {
       WHERE id = ?
     `).run(
       data.result               ?? match.result,
-      data.winTeamId            ?? match.win_team_id,
-      Number(data.isTie         ?? Boolean(match.is_tie)),
-      Number(data.isAbandoned   ?? Boolean(match.is_abandoned)),
+      isTie || isAbandoned ? null : winTeamId,
+      Number(isTie),
+      Number(isAbandoned),
       data.playerOfTheMatchId   ?? match.player_of_the_match_id,
       matchId,
     )
@@ -496,12 +523,20 @@ export function setMatchResult(matchId, data) {
         UPDATE innings SET
           total_runs  = ?,
           wickets     = ?,
-          overs_faced = ?
+          overs_faced = ?,
+          is_all_out  = ?,
+          status      = CASE WHEN ? = 0 THEN 'completed' ELSE status END
         WHERE id = ?
-      `).run(totals.total_runs, totals.wickets, oversFaced, inningsId)
+      `).run(
+        totals.total_runs,
+        totals.wickets,
+        oversFaced,
+        Number(totals.wickets >= 10),
+        Number(isAbandoned),
+        inningsId,
+      )
     }
   })()
 
   return database.prepare('SELECT * FROM matches WHERE id = ?').get(matchId)
 }
-

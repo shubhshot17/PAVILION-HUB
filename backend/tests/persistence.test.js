@@ -121,10 +121,27 @@ test('persists score events across database reopen and keeps private user fields
     }))
     assert.equal(event.response.status, 201)
 
+    const runOut = await request('/scoring-events', post({
+      matchId: match.body.id,
+      innings: 1,
+      over: 0,
+      ball: 2,
+      runs: 0,
+      eventType: 'wicket',
+      wicketType: 'run-out',
+      playerOutId: batter.body.id,
+      batterId: batter.body.id,
+      bowlerId: bowler.body.id,
+    }))
+    assert.equal(runOut.response.status, 201)
+
     const scorecard = await request(`/matches/${match.body.id}/scorecard`)
     assert.equal(scorecard.response.status, 200)
     assert.equal(scorecard.body.innings[0].runs, 4)
+    assert.equal(scorecard.body.innings[0].wickets, 1)
     assert.equal(scorecard.body.innings[0].battingFigures[0].runs, 4)
+    assert.equal(scorecard.body.innings[0].battingFigures[0].dismissal, 'run-out')
+    assert.equal(scorecard.body.innings[0].bowlingFigures[0].wickets, 0)
     assert.equal(scorecard.body.innings[0].events[0].id, event.body.id)
     assert.equal(JSON.stringify(scorecard.body).includes('private@example.invalid'), false)
     assert.equal(JSON.stringify(scorecard.body).includes('hash-not-returned'), false)
@@ -135,6 +152,22 @@ test('persists score events across database reopen and keeps private user fields
 
     const deleteAttempt = await request(`/scoring-events/${event.body.id}`, { method: 'DELETE' })
     assert.equal(deleteAttempt.response.status, 405)
+
+    const completed = await request(`/matches/${match.body.id}/result`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ result: 'Finished for persistence check' }),
+    })
+    assert.equal(completed.response.status, 200)
+    const postMatchEvent = await request('/scoring-events', post({
+      matchId: match.body.id,
+      innings: 1,
+      over: 0,
+      ball: 3,
+      runs: 1,
+      eventType: 'run',
+    }))
+    assert.equal(postMatchEvent.response.status, 409)
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
     database.close()
@@ -143,7 +176,7 @@ test('persists score events across database reopen and keeps private user fields
   const reopened = createDatabase(databasePath)
   try {
     assert.equal(reopened.prepare('SELECT COUNT(*) AS count FROM matches').get().count, 1)
-    assert.equal(reopened.prepare('SELECT COUNT(*) AS count FROM ball_by_ball_events').get().count, 1)
+    assert.equal(reopened.prepare('SELECT COUNT(*) AS count FROM ball_by_ball_events').get().count, 2)
     assert.equal(reopened.prepare('SELECT SUM(batter_runs + extra_runs) AS runs FROM ball_by_ball_events')
       .get().runs, 4)
     assert.ok(reopened.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get().count >= 1, 'at least one migration applied')

@@ -17,6 +17,23 @@ export interface TeamScore {
   declared?: boolean
 }
 
+export interface MatchPlayingXI {
+  teamId: string
+  playerIds: string[]
+  captainId: string
+  wicketkeeperId: string
+  captainName?: string | null
+  wicketkeeperName?: string | null
+  selectedPlayers?: { id: string; name: string }[]
+}
+
+export interface MatchSetup {
+  oversPerInnings: number
+  tossWinnerTeamId: string
+  tossDecision: 'bat' | 'field'
+  playingXIs: MatchPlayingXI[]
+}
+
 export interface Match {
   id: string
   tournament: string
@@ -36,6 +53,8 @@ export interface Match {
   isAbandoned?: boolean
   winTeamId?: string
   playerOfTheMatchId?: string
+  isDemo?: boolean
+  setup?: MatchSetup
 }
 
 export interface Scorecard {
@@ -88,6 +107,17 @@ export interface ScoringEvent {
   nonStrikerId?: string
   wicketType?: string
   playerOutId?: string
+  delivery?: {
+    runsOffBat: number
+    extraType?: 'wide' | 'noball' | 'bye' | 'legbye' | 'penalty'
+    extraRuns?: number
+    secondaryExtraType?: 'bye' | 'legbye'
+    wicket?: {
+      type: string
+      dismissedPlayerId: string
+      battersCrossed?: boolean
+    }
+  }
 }
 
 export interface Team {
@@ -108,6 +138,8 @@ export interface Player {
   jerseyNumber?: number
   battingStyle?: string
   bowlingStyle?: string
+  isCaptain?: boolean
+  isWicketkeeper?: boolean
   isActive?: boolean
   isDemo?: boolean
 }
@@ -257,6 +289,7 @@ export interface DashboardData {
   upcoming: Match[]
   recent: Match[]
   standings: StandingRow[]
+  teamCount: number
 }
 
 export interface AppNavItem {
