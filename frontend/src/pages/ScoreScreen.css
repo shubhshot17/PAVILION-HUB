@@ -46,6 +46,10 @@
   font-size: 0.95rem;
 }
 
+.score-setup select {
+  margin-top: 6px;
+}
+
 /* ---------- scoreboard ---------- */
 .score-screen__header {
   display: flex;
@@ -56,6 +60,36 @@
 }
 .score-screen__header h2 {
   margin: 0;
+}
+.score-screen__header label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+.score-screen__header select {
+  max-width: min(50vw, 360px);
+  background: #14210f;
+  color: #f2f7ee;
+  border: 1px solid rgba(198, 242, 78, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.score-loading {
+  color: rgba(255, 255, 255, 0.7);
+}
+.score-message {
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+}
+.score-message--error {
+  color: #ffd4d4;
+  background: rgba(255, 100, 100, 0.12);
+  border: 1px solid rgba(255, 100, 100, 0.35);
 }
 
 .score-scoreboard {
@@ -165,12 +199,29 @@
   padding: 6px 8px;
   margin-left: 6px;
 }
+.score-controls__extras label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
 .score-controls__runs {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 10px;
 }
 @media (max-width: 640px) {
+  .score-screen__header {
+    align-items: stretch;
+  }
+  .score-screen__header label {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+  .score-screen__header select {
+    max-width: 70%;
+  }
   .score-controls__runs {
     grid-template-columns: repeat(4, 1fr);
   }
@@ -360,6 +411,11 @@
   gap: 6px;
   font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.7);
+}
+.score-modal input[type="checkbox"] {
+  align-self: flex-start;
+  width: 20px;
+  height: 20px;
 }
 .score-modal select,
 .score-modal input {

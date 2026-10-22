@@ -11,6 +11,8 @@ import "./App.css";
 function App() {
   const [activePage, setActivePage] = useState("dashboard");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [matchAction, setMatchAction] = useState<{ id: string; edit: boolean } | null>(null);
+  const [createMatch, setCreateMatch] = useState(false);
 
   const PAGE_TITLES: Record<string, string> = {
     dashboard:   "Dashboard",
@@ -26,12 +28,35 @@ function App() {
   const navigate = (pageId: string) => {
     setActivePage(pageId);
     setMenuOpen(false); // close the mobile drawer after choosing a page
+    setMatchAction(null);
+    setCreateMatch(false);
+  };
+
+  const openMatch = (id: string, edit: boolean) => {
+    setMatchAction({ id, edit });
+    setCreateMatch(false);
+    setActivePage("matches");
+    setMenuOpen(false);
+  };
+
+  const startMatchCreation = () => {
+    setMatchAction(null);
+    setCreateMatch(true);
+    setActivePage("matches");
+    setMenuOpen(false);
   };
 
   function renderPage() {
     switch (activePage) {
       case "dashboard":
-        return <Dashboard onNavigate={navigate} />;
+        return (
+          <Dashboard
+            onNavigate={navigate}
+            onViewMatch={(id) => openMatch(id, false)}
+            onEditSetup={(id) => openMatch(id, true)}
+            onCreateMatch={startMatchCreation}
+          />
+        );
       case "score":
         return <ScoreScreen />;
       case "tournaments":
@@ -39,7 +64,18 @@ function App() {
       case "teams":
         return <TeamsPage />;
       case "matches":
-        return <MatchesPage />;
+        return (
+          <MatchesPage
+            initialMatchId={matchAction?.id}
+            initialEditSetup={matchAction?.edit}
+            initialCreate={createMatch}
+            onInitialActionHandled={() => {
+              setMatchAction(null);
+              setCreateMatch(false);
+            }}
+            onManageTeams={() => navigate("teams")}
+          />
+        );
       case "live":
         return <MatchesPage initialFilter="live" />;
       default:

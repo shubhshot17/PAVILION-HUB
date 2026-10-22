@@ -1,15 +1,13 @@
 /* ============================================================
    PAVILION HUB — API service layer
    ------------------------------------------------------------
-   Real API calls to the Express backend.
-   Falls back gracefully to demo data when the backend is
-   unreachable (e.g. static preview / offline Capacitor build).
+   Real API calls to the Express backend. API failures are surfaced to
+   the calling page; the normal interface does not substitute demo records.
 
    VITE_API_URL env var controls the base URL (see .env.example).
    ============================================================ */
 
 import type {
-  DashboardData,
   Tournament,
   StandingRow,
   Fixture,
@@ -21,8 +19,14 @@ import type {
   PlayerStats,
   TeamProfile,
   Scorecard,
+  DashboardData,
+  MatchSetup,
 } from '../types'
-import { DEMO_MATCHES, DEMO_STANDINGS } from '../data/demoData'
+import type {
+  BowlerSelection,
+  DeliveryEvent,
+  MatchState,
+} from '../scoring/engine'
 
 /* ── Base URL ───────────────────────────────────────────────── */
 
@@ -72,39 +76,30 @@ const del  = (path: string) =>
 /* ── Dashboard ──────────────────────────────────────────────── */
 
 /**
- * Fetch dashboard data.  On network failure the UI gets demo data so
- * the app still looks complete during offline/Android builds.
- * Demo data is clearly flagged via the footer on the Dashboard page.
+ * Fetch dashboard data from persistent backend records. Demo records are
+ * omitted so the normal application never presents seeded examples as user data.
  */
-export async function fetchDashboardData(): Promise<DashboardData & { isDemo: boolean }> {
-  try {
-    const [matches, tournaments] = await Promise.all([
-      get<Match[]>('/matches'),
-      get<Tournament[]>('/tournaments'),
-    ])
+export async function fetchDashboardData(): Promise<DashboardData> {
+  const [allMatches, allTournaments, allTeams] = await Promise.all([
+    get<Match[]>('/matches'),
+    get<Tournament[]>('/tournaments'),
+    get<Team[]>('/teams'),
+  ])
+  const matches = allMatches.filter((match) => !match.isDemo)
+  const tournaments = allTournaments.filter((tournament) => !tournament.isDemo)
+  const teams = allTeams.filter((team) => !team.isDemo)
 
-    // Find the most recently active tournament for the standings preview
-    const activeTournament = tournaments.find((t) => t.isActive) ?? tournaments[0]
-    const standings: StandingRow[] = activeTournament
-      ? await get<StandingRow[]>(`/tournaments/${activeTournament.id}/standings`)
-      : []
+  const activeTournament = tournaments.find((tournament) => tournament.isActive) ?? tournaments[0]
+  const standings: StandingRow[] = activeTournament
+    ? await get<StandingRow[]>(`/tournaments/${activeTournament.id}/standings`)
+    : []
 
-    return {
-      liveMatches:  matches.filter((m) => m.status === 'live'),
-      upcoming:     matches.filter((m) => m.status === 'upcoming'),
-      recent:       matches.filter((m) => m.status === 'completed').slice(0, 10),
-      standings,
-      isDemo: false,
-    }
-  } catch {
-    // Backend unreachable — serve demo data with a clear label
-    return {
-      liveMatches: DEMO_MATCHES.filter((m) => m.status === 'live'),
-      upcoming:    DEMO_MATCHES.filter((m) => m.status === 'upcoming'),
-      recent:      DEMO_MATCHES.filter((m) => m.status === 'completed'),
-      standings:   DEMO_STANDINGS,
-      isDemo: true,
-    }
+  return {
+    liveMatches: matches.filter((match) => match.status === 'live'),
+    upcoming: matches.filter((match) => match.status === 'upcoming'),
+    recent: matches.filter((match) => match.status === 'completed').slice(0, 10),
+    standings,
+    teamCount: teams.length,
   }
 }
 
@@ -149,11 +144,15 @@ export const teamsApi = {
 
 /* ── Players ────────────────────────────────────────────────── */
 
+type PlayerInput = Omit<Partial<Player>, 'jerseyNumber'> & {
+  jerseyNumber?: number | null
+}
+
 export const playersApi = {
   list:   ()           => get<Player[]>('/players'),
   get:    (id: string) => get<Player>(`/players/${id}`),
-  create: (data: Partial<Player>) => post<Player>('/players', data),
-  update: (id: string, data: Partial<Player>) => patch<Player>(`/players/${id}`, data),
+  create: (data: PlayerInput) => post<Player>('/players', data),
+  update: (id: string, data: PlayerInput) => patch<Player>(`/players/${id}`, data),
   remove: (id: string) => del(`/players/${id}`),
   stats:  (id: string) => get<PlayerStats>(`/players/${id}/stats`),
 }
@@ -163,8 +162,8 @@ export const playersApi = {
 export const matchesApi = {
   list:      ()           => get<Match[]>('/matches'),
   get:       (id: string) => get<Match>(`/matches/${id}`),
-  create:    (data: Partial<Match>) => post<Match>('/matches', data),
-  update:    (id: string, data: Partial<Match>) => patch<Match>(`/matches/${id}`, data),
+  create:    (data: MatchInput) => post<Match>('/matches', data),
+  update:    (id: string, data: MatchInput) => patch<Match>(`/matches/${id}`, data),
   remove:    (id: string) => del(`/matches/${id}`),
   scorecard: (id: string) => get<Scorecard>(`/matches/${id}/scorecard`),
   setResult: (id: string, data: {
@@ -174,4 +173,62 @@ export const matchesApi = {
     isAbandoned?: boolean
     playerOfTheMatchId?: string
   }) => patch<Match>(`/matches/${id}/result`, data),
+}
+
+export interface ScoringSession {
+  matchId: string
+  version: number
+  matchState: MatchState | null
+  deliveries: DeliveryEvent[]
+  bowlerSelections: BowlerSelection[]
+  eventIds: string[]
+}
+
+export const scoringApi = {
+  get: (matchId: string) => get<ScoringSession>(`/matches/${matchId}/scoring`),
+  start: (matchId: string, matchState: MatchState) =>
+    post<ScoringSession>(`/matches/${matchId}/scoring/start`, {
+      expectedVersion: 0,
+      matchState,
+      deliveries: [],
+      bowlerSelections: [],
+    }),
+  record: (
+    matchId: string,
+    expectedVersion: number,
+    matchState: MatchState,
+    deliveries: DeliveryEvent[],
+    bowlerSelections: BowlerSelection[],
+    delivery: DeliveryEvent,
+  ) => post<ScoringSession>(`/matches/${matchId}/scoring/deliveries`, {
+    expectedVersion,
+    matchState,
+    deliveries,
+    bowlerSelections,
+    delivery,
+  }),
+  chooseBowler: (
+    matchId: string,
+    expectedVersion: number,
+    matchState: MatchState,
+    deliveries: DeliveryEvent[],
+    bowlerSelections: BowlerSelection[],
+  ) => post<ScoringSession>(`/matches/${matchId}/scoring/bowler`, {
+    expectedVersion,
+    matchState,
+    deliveries,
+    bowlerSelections,
+  }),
+  undo: (matchId: string, expectedVersion: number) =>
+    post<ScoringSession>(`/matches/${matchId}/scoring/undo`, { expectedVersion }),
+}
+
+export interface MatchInput {
+  tournamentId?: string
+  format: Match['format']
+  venue: string
+  date: string
+  status: Match['status']
+  teams: [{ id: string }, { id: string }]
+  setup: MatchSetup
 }

@@ -1,6 +1,6 @@
 /* ============================================================
    PAVILION HUB — Scoring engine unit tests (vitest)
-   Demo-data only. Run: npm test
+   Test fixtures only. Run: npm test
    ============================================================ */
 import { describe, expect, it } from 'vitest'
 import {
@@ -73,7 +73,7 @@ describe('legal deliveries vs extras', () => {
     const inn = s.innings[0]
     expect(inn.legalBalls).toBe(0)
     expect(inn.runs).toBe(1)
-    expect(inn.batterFigures.A1.balls).toBe(0) // no-ball: batter not charged a ball
+    expect(inn.batterFigures.A1.balls).toBe(1) // no-balls count as balls faced
     expect(inn.bowlerFigures.B1.noBalls).toBe(1)
   })
 
@@ -97,6 +97,22 @@ describe('legal deliveries vs extras', () => {
     expect(inn.batterFigures.A1.balls).toBe(1)
     // bowler is not charged byes
     expect(inn.bowlerFigures.B1.runs).toBe(0)
+  })
+
+  it('credits byes off a no-ball to extras rather than the bowler', () => {
+    let s = buildInitialState(setup())
+    s = applyDelivery(s, {
+      runsOffBat: 0,
+      extraType: 'noball',
+      secondaryExtraType: 'bye',
+      extraRuns: 2,
+    })
+    const inn = s.innings[0]
+    expect(inn.runs).toBe(3)
+    expect(inn.legalBalls).toBe(0)
+    expect(inn.extras).toMatchObject({ total: 3, noBalls: 1, byes: 2 })
+    expect(inn.bowlerFigures.B1.runs).toBe(1)
+    expect(inn.batterFigures.A1.balls).toBe(1)
   })
 })
 
@@ -163,6 +179,16 @@ describe('strike rotation', () => {
     const inn = s.innings[0]
     expect(inn.strikerId).toBe('A3')
     expect(inn.nonStrikerId).toBe('A1')
+  })
+
+  it('uses the crossing choice for a run-out before placing the next batter', () => {
+    let s = buildInitialState(setup())
+    s = applyDelivery(s, {
+      runsOffBat: 0,
+      wicket: { type: 'runout', dismissedPlayerId: 'A1', battersCrossed: true },
+    })
+    expect(s.innings[0].strikerId).toBe('A2')
+    expect(s.innings[0].nonStrikerId).toBe('A3')
   })
 
   it('wickets off the bat credit the bowler; run-outs do not', () => {
@@ -246,6 +272,68 @@ describe('innings transitions, target and result', () => {
     expect(s.innings[0].completed).toBe(true)
     expect(s.currentInningsIndex).toBe(1)
   })
+
+  it('ends the innings when the configured batting order is exhausted', () => {
+    let s = buildInitialState(setup())
+    for (let i = 0; i < 3; i++) {
+      s = applyDelivery(s, {
+        runsOffBat: 0,
+        wicket: { type: 'bowled', dismissedPlayerId: s.innings[0].strikerId },
+      })
+    }
+    expect(s.innings[0].completed).toBe(true)
+    expect(s.currentInningsIndex).toBe(1)
+  })
+
+  it('starts the second innings with the chasing team batting order', () => {
+    let state = buildInitialState(setup({ totalOvers: 1 }))
+    for (let i = 0; i < 6; i++) state = applyDelivery(state, bat(0))
+    expect(state.innings[1].battingTeamId).toBe('B')
+    expect(state.innings[1].battingOrder).toEqual(teamB.players.map((player) => player.id))
+    expect(state.innings[1].strikerId).toBe('B1')
+    expect(state.innings[1].nonStrikerId).toBe('B2')
+  })
+
+  it('rejects dismissals not permitted from a no-ball or wide', () => {
+    const state = buildInitialState(setup())
+    expect(() => applyDelivery(state, {
+      runsOffBat: 0,
+      extraType: 'noball',
+      wicket: { type: 'bowled', dismissedPlayerId: 'A1' },
+    })).toThrow(/no-ball only permits/)
+    expect(() => applyDelivery(state, {
+      runsOffBat: 0,
+      extraType: 'wide',
+      wicket: { type: 'caught', dismissedPlayerId: 'A1' },
+    })).toThrow(/wide only permits/)
+  })
+
+  it('only allows the non-striker to be dismissed by a run-out or retirement', () => {
+    const state = buildInitialState(setup())
+    expect(() => applyDelivery(state, {
+      runsOffBat: 0,
+      wicket: { type: 'bowled', dismissedPlayerId: 'A2' },
+    })).toThrow(/Only a run-out/)
+  })
+
+  it('rejects batter runs on wides, byes, leg-byes, and penalties', () => {
+    const state = buildInitialState(setup())
+    for (const extraType of ['wide', 'bye', 'legbye', 'penalty'] as const) {
+      expect(() => applyDelivery(state, {
+        runsOffBat: 1,
+        extraType,
+      })).toThrow(/only valid on a no-ball/)
+    }
+  })
+
+  it('does not allow deliveries after the match is complete', () => {
+    let state = buildInitialState(setup({ totalOvers: 1 }))
+    for (let i = 0; i < 6; i++) state = applyDelivery(state, bat(0))
+    state = setBowler(state, 'B1')
+    state = applyDelivery(state, bat(1))
+    expect(state.result).toContain('won by 10 wickets')
+    expect(() => applyDelivery(state, bat(0))).toThrow(/after the innings or match has ended/)
+  })
 })
 
 describe('undo (replay from event history)', () => {
@@ -272,6 +360,23 @@ describe('undo (replay from event history)', () => {
     const undone = undoLastDelivery(st, events)
     expect(undone.innings[0].legalBalls).toBe(5)
     expect(undone.innings[0].overs.length).toBe(1)
+  })
+
+  it('undo preserves bowler changes made before the delivery being undone', () => {
+    const st = setup()
+    const events: DeliveryEvent[] = Array.from({ length: 6 }, () => bat(0))
+    let state = buildInitialState(st)
+    for (const event of events) state = applyDelivery(state, event)
+    state = setBowler(state, 'B2')
+    const bowlerSelections = [{ afterDeliveryCount: events.length, bowlerId: 'B2' }]
+    const lastDelivery = bat(1)
+    events.push(lastDelivery)
+    state = applyDelivery(state, lastDelivery)
+
+    const undone = undoLastDelivery(st, events, bowlerSelections)
+    expect(undone.innings[0].bowlerId).toBe('B2')
+    expect(undone.innings[0].legalBalls).toBe(6)
+    expect(undone.innings[0].overBowlers).toEqual(['B1', 'B2'])
   })
 })
 

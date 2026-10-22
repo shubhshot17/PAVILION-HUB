@@ -8,8 +8,7 @@ interface TopBarProps {
   menuOpen: boolean;
 }
 
-/* Slim top navigation bar: menu button (mobile), brand, page title,
-   a live indicator and a demo-data notice. */
+/* Slim top navigation bar: menu button (mobile), brand, and page title. */
 export function TopBar({ title, onMenuClick, menuOpen }: TopBarProps) {
   return (
     <header className="topbar">
@@ -29,20 +28,7 @@ export function TopBar({ title, onMenuClick, menuOpen }: TopBarProps) {
       </div>
 
       <div className="topbar__right">
-        <span
-          className="topbar__demo-chip"
-          title="All data in this app is fictional demo data"
-        >
-          Demo data
-        </span>
         <span className="topbar__season">Season 2026</span>
-        <div
-          className="topbar__avatar"
-          aria-label="Signed in as Scorer"
-          title="Scorer"
-        >
-          S
-        </div>
       </div>
     </header>
   );

@@ -21,13 +21,17 @@ export type WicketType =
 export interface DeliveryEvent {
   /** Batter-facing runs (excludes extras credited to team only) */
   runsOffBat: number
-  /** Extra runs: for wide/noball the penalty itself; for bye/legbye the runs run; plus additional runs */
+  /** For wides/no-balls, additional runs beyond the automatic penalty. */
   extraType?: ExtrasType
   extraRuns?: number
+  /** A no-ball can also have bye or leg-bye runs instead of runs credited off the bat. */
+  secondaryExtraType?: 'bye' | 'legbye'
   /** wicket information; the dismissed batter may differ from strikers if run out */
   wicket?: {
     type: WicketType
     dismissedPlayerId: string
+    /** For a run-out, whether batters crossed before the wicket was broken. */
+    battersCrossed?: boolean
     /** on a run-out both batters can be dismissed in theory; UI supports one per event */
   }
   /** optional note, e.g. "misfield" — informational only */
@@ -218,7 +222,9 @@ export function deliveryTeamRuns(d: DeliveryEvent): number {
 /** Bowler is charged for wides, no-balls and runs off the bat (not byes/leg-byes/penalty). */
 export function deliveryBowlerRuns(d: DeliveryEvent): number {
   let runs = d.runsOffBat
-  if (d.extraType === 'wide' || d.extraType === 'noball') runs += 1 + (d.extraRuns ?? 0)
+  if (d.extraType === 'wide' || d.extraType === 'noball') {
+    runs += 1 + (d.secondaryExtraType ? 0 : (d.extraRuns ?? 0))
+  }
   return runs
 }
 
@@ -258,7 +264,8 @@ export function calculateTarget(state: MatchState): TargetInfo {
 export function isInningsOver(state: MatchState, inn: InningsState): boolean {
   const oversLimit = state.totalOvers * 6
   const allOut = inn.wickets >= 10
-  return inn.completed || allOut || inn.legalBalls >= oversLimit
+  const noBattersLeft = inn.outIds.length >= Math.max(0, inn.battingOrder.length - 1)
+  return inn.completed || allOut || noBattersLeft || inn.legalBalls >= oversLimit
 }
 
 /* ---------------- event application ---------------- */
@@ -270,6 +277,53 @@ export function isInningsOver(state: MatchState, inn: InningsState): boolean {
 export function applyDelivery(state: MatchState, event: DeliveryEvent): MatchState {
   const next: MatchState = structuredCloneNext(state)
   const inn = next.innings[next.currentInningsIndex]
+  if (next.result || inn.completed) {
+    throw new Error('Cannot score a delivery after the innings or match has ended.')
+  }
+  if (!Number.isInteger(event.runsOffBat) || event.runsOffBat < 0
+    || (event.extraRuns !== undefined
+      && (!Number.isInteger(event.extraRuns) || event.extraRuns < 0))) {
+    throw new Error('Runs must be non-negative integers.')
+  }
+  if (event.extraRuns !== undefined && event.extraType === undefined) {
+    throw new Error('Extra runs require an extra type.')
+  }
+  if (event.extraType !== undefined
+    && event.extraType !== 'noball' && event.runsOffBat > 0) {
+    throw new Error('Runs off the bat are only valid on a no-ball when an extra is selected.')
+  }
+  if (event.secondaryExtraType !== undefined
+    && (event.extraType !== 'noball'
+      || !['bye', 'legbye'].includes(event.secondaryExtraType)
+      || event.runsOffBat > 0)) {
+    throw new Error('A secondary bye or leg-bye can only accompany a no-ball.')
+  }
+  if (event.wicket
+    && ![inn.strikerId, inn.nonStrikerId].includes(event.wicket.dismissedPlayerId)) {
+    throw new Error('The dismissed batter must be at the crease.')
+  }
+  if (event.wicket && event.wicket.type !== 'runout'
+    && event.wicket.type !== 'other' && event.wicket.dismissedPlayerId !== inn.strikerId) {
+    throw new Error('Only a run-out or retired dismissal can dismiss the non-striker.')
+  }
+  if (event.wicket && event.extraType === 'noball'
+    && !['runout', 'other'].includes(event.wicket.type)) {
+    throw new Error('A no-ball only permits a run-out or retired dismissal.')
+  }
+  if (event.wicket && event.extraType === 'wide'
+    && !['runout', 'stumped', 'hitwicket', 'other'].includes(event.wicket.type)) {
+    throw new Error('A wide only permits a run-out, stumping, hit wicket, or retired dismissal.')
+  }
+  if (event.wicket && ['bye', 'legbye'].includes(event.extraType ?? '')
+    && !['runout', 'stumped', 'hitwicket', 'other'].includes(event.wicket.type)) {
+    throw new Error('A bye or leg-bye only permits a run-out, stumping, hit wicket, or retired dismissal.')
+  }
+  if (event.wicket && inn.wickets >= 10) {
+    throw new Error('The batting side is already all out.')
+  }
+  if (event.wicket && event.wicket.type !== 'runout' && event.runsOffBat > 0) {
+    throw new Error('Runs off the bat on a wicket delivery are only supported for run-outs.')
+  }
   applyDeliveryToInnings(inn, event)
   checkInningsTransition(next, inn)
   return next
@@ -296,9 +350,13 @@ function applyDeliveryToInnings(inn: InningsState, event: DeliveryEvent) {
   if (event.extraType) {
     inn.extras.total += teamRuns - event.runsOffBat
     if (event.extraType === 'wide') inn.extras.wides += 1 + (event.extraRuns ?? 0)
-    if (event.extraType === 'noball') inn.extras.noBalls += 1 + (event.extraRuns ?? 0)
+    if (event.extraType === 'noball') {
+      inn.extras.noBalls += 1 + (event.secondaryExtraType ? 0 : (event.extraRuns ?? 0))
+    }
     if (event.extraType === 'bye') inn.extras.byes += event.extraRuns ?? 0
     if (event.extraType === 'legbye') inn.extras.legByes += event.extraRuns ?? 0
+    if (event.secondaryExtraType === 'bye') inn.extras.byes += event.extraRuns ?? 0
+    if (event.secondaryExtraType === 'legbye') inn.extras.legByes += event.extraRuns ?? 0
     if (event.extraType === 'penalty') inn.extras.penalty += event.extraRuns ?? 5
   }
 
@@ -309,9 +367,9 @@ function applyDeliveryToInnings(inn: InningsState, event: DeliveryEvent) {
     if (event.runsOffBat === FOUR) strikerFig.fours += 1
     if (event.runsOffBat === SIX) strikerFig.sixes += 1
   }
-  if (legal) {
+  if (legal || event.extraType === 'noball') {
     strikerFig.balls += 1
-    if (event.runsOffBat === 0 && !event.extraType) strikerFig.dots += 1
+    if (legal && event.runsOffBat === 0 && !event.extraType) strikerFig.dots += 1
   }
 
   // bowler figures
@@ -329,6 +387,9 @@ function applyDeliveryToInnings(inn: InningsState, event: DeliveryEvent) {
   // if the dismissed player is the (post-rotation) striker, the new batter
   // takes strike; otherwise they join at the non-striker's end.
   if (event.wicket) {
+    if (event.wicket.type === 'runout' && event.wicket.battersCrossed) {
+      rotateStrike(inn, true)
+    }
     inn.wickets += 1
     if (!inn.outIds.includes(event.wicket.dismissedPlayerId)) {
       inn.outIds.push(event.wicket.dismissedPlayerId)
@@ -388,11 +449,21 @@ function completeOver(inn: InningsState) {
 export function setBowler(state: MatchState, bowlerId: string): MatchState {
   const next: MatchState = structuredCloneNext(state)
   const inn = next.innings[next.currentInningsIndex]
+  if (next.result || inn.completed) {
+    throw new Error('Cannot change the bowler after the innings or match has ended.')
+  }
+  if (!bowlerId) {
+    throw new Error('A bowler must be selected.')
+  }
   if (inn.overs[inn.overs.length - 1].length > 0) {
     throw new Error('Cannot change bowler mid-over.')
   }
   if (inn.overBowlers.length >= 1 && inn.overBowlers[inn.overBowlers.length - 1] === bowlerId) {
     throw new Error('A bowler cannot bowl two overs in a row.')
+  }
+  const maximumOversPerBowler = Math.ceil(next.totalOvers / 5)
+  if (inn.overBowlers.filter((id) => id === bowlerId).length >= maximumOversPerBowler) {
+    throw new Error(`A bowler cannot bowl more than ${maximumOversPerBowler} overs in this match.`)
   }
   inn.overBowlers.push(bowlerId)
   inn.bowlerId = bowlerId
@@ -408,8 +479,8 @@ function checkInningsTransition(state: MatchState, inn: InningsState) {
     if (state.currentInningsIndex === 0) {
       const team = state.teamA.id === inn.battingTeamId ? state.teamA : state.teamB
       const other = state.teamA.id === inn.battingTeamId ? state.teamB : state.teamA
-      const shell = createInnings(other, team, team.players.map((p) => p.id), '', '', '')
-      const order = team.players.map((p) => p.id)
+      const order = other.players.map((p) => p.id)
+      const shell = createInnings(other, team, order, '', order[0] ?? '', order[1] ?? '')
       shell.battingTeamId = other.id
       shell.bowlingTeamId = team.id
       shell.battingOrder = order
@@ -457,11 +528,31 @@ export function finishMatch(state: MatchState) {
  * Because replay is deterministic, undo is always exact — even across
  * over completions, strike changes and innings transitions.
  */
-export function undoLastDelivery(setup: MatchSetup, delivered: DeliveryEvent[]): MatchState {
+export interface BowlerSelection {
+  afterDeliveryCount: number
+  bowlerId: string
+}
+
+export function undoLastDelivery(
+  setup: MatchSetup,
+  delivered: DeliveryEvent[],
+  bowlerSelections: BowlerSelection[] = [],
+): MatchState {
   const replay = delivered.slice(0, -1)
   let state = buildInitialState(setup)
-  for (const d of replay) {
-    state = applyDelivery(state, d)
+  let selectionIndex = 0
+
+  while (bowlerSelections[selectionIndex]?.afterDeliveryCount === 0) {
+    state = setBowler(state, bowlerSelections[selectionIndex].bowlerId)
+    selectionIndex += 1
+  }
+
+  for (const [index, delivery] of replay.entries()) {
+    state = applyDelivery(state, delivery)
+    while (bowlerSelections[selectionIndex]?.afterDeliveryCount === index + 1) {
+      state = setBowler(state, bowlerSelections[selectionIndex].bowlerId)
+      selectionIndex += 1
+    }
   }
   return state
 }

@@ -4,8 +4,49 @@ import controller from '../controllers/matchesController.js'
 import { partnerships, setMatchResult } from '../models/tournament.js'
 import { HttpError } from '../middleware/errorHandler.js'
 import { validateMatchResult, validatePartnership } from '../controllers/validators.js'
+import { scoringSessions } from '../models/index.js'
 
 const router = createResourceRouter(controller)
+
+function requireScoringBody(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new HttpError(400, 'Request body must be a JSON object')
+  }
+}
+
+router.get('/:id/scoring', (req, res) => {
+  const session = scoringSessions.get(req.params.id)
+  if (!session) throw new HttpError(404, 'Match not found')
+  res.status(200).json(session)
+})
+
+router.post('/:id/scoring/start', (req, res) => {
+  requireScoringBody(req.body)
+  const session = scoringSessions.start(req.params.id, req.body)
+  if (!session) throw new HttpError(404, 'Match not found')
+  res.status(201).json(session)
+})
+
+router.post('/:id/scoring/deliveries', (req, res) => {
+  requireScoringBody(req.body)
+  const session = scoringSessions.recordDelivery(req.params.id, req.body)
+  if (!session) throw new HttpError(404, 'Match not found')
+  res.status(201).json(session)
+})
+
+router.post('/:id/scoring/bowler', (req, res) => {
+  requireScoringBody(req.body)
+  const session = scoringSessions.chooseBowler(req.params.id, req.body)
+  if (!session) throw new HttpError(404, 'Match not found')
+  res.status(200).json(session)
+})
+
+router.post('/:id/scoring/undo', (req, res) => {
+  requireScoringBody(req.body)
+  const session = scoringSessions.undo(req.params.id, req.body)
+  if (!session) throw new HttpError(404, 'Match not found')
+  res.status(200).json(session)
+})
 
 // ── Match result (set winner, POTM, tie/abandoned) ────────────
 router.patch('/:id/result', (req, res) => {

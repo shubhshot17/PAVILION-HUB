@@ -388,6 +388,64 @@ test('match result endpoint sets winner, POTM, and updates match', async () => {
   assert.equal(alpha.won, 1)
 })
 
+test('scoring events refresh completed innings and feed tournament NRR', async () => {
+  const { tournament, teams } = await buildTournament()
+  const match = await buildMatch(tournament, teams[0], teams[1])
+
+  const record = (innings, ball, runs, eventType = 'run', legalBall = true) =>
+    req('/scoring-events', post({
+      matchId: match.id,
+      innings,
+      over: 0,
+      ball,
+      runs,
+      eventType,
+      legalBall,
+    }))
+
+  const boundary = await record(1, 1, 4, 'boundary')
+  assert.equal(boundary.status, 201)
+  const wideWithAdditionalRun = await record(1, 2, 2, 'wide', false)
+  assert.equal(wideWithAdditionalRun.status, 201)
+  const illegalWide = await record(1, 3, 1, 'wide', true)
+  assert.equal(illegalWide.status, 400)
+  for (let ball = 2; ball <= 6; ball++) {
+    assert.equal((await record(1, ball, 0)).status, 201)
+  }
+  for (let ball = 1; ball <= 6; ball++) {
+    assert.equal((await record(2, ball, ball === 1 ? 3 : 0)).status, 201)
+  }
+
+  const result = await req(`/matches/${match.id}/result`, patch({
+    result: 'Alpha XI won by 3 runs',
+    winTeamId: teams[0].id,
+  }))
+  assert.equal(result.status, 200)
+
+  const inningsRows = database.prepare(`
+    SELECT total_runs, wickets, overs_faced, is_all_out, status
+    FROM innings WHERE match_id = ? ORDER BY innings_number
+  `).all(match.id)
+  assert.deepEqual(inningsRows.map(({ total_runs, wickets, overs_faced, status }) => ({
+    total_runs, wickets, overs_faced, status,
+  })), [
+    { total_runs: 6, wickets: 0, overs_faced: 1, status: 'completed' },
+    { total_runs: 3, wickets: 0, overs_faced: 1, status: 'completed' },
+  ])
+
+  const standings = await req(`/tournaments/${tournament.id}/standings`)
+  assert.equal(standings.status, 200)
+  assert.equal(standings.body.find(({ teamId }) => teamId === teams[0].id).points, 2)
+  assert.equal(standings.body.find(({ teamId }) => teamId === teams[0].id).netRunRate, 3)
+  assert.equal(standings.body.find(({ teamId }) => teamId === teams[1].id).netRunRate, -3)
+
+  const invalidWinner = await req(`/matches/${match.id}/result`, patch({
+    result: 'Invalid winner',
+    winTeamId: teams[2].id,
+  }))
+  assert.equal(invalidWinner.status, 400)
+})
+
 test('teams page: GET /api/tournaments/:id/registrations returns registered teams', async () => {
   const { tournament, teams } = await buildTournament()
   const res = await req(`/tournaments/${tournament.id}/registrations`)

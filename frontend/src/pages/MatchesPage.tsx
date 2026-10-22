@@ -16,6 +16,7 @@ import {
 } from '../components/SectionCard'
 import { matchesApi } from '../services/api'
 import type { Match, Scorecard } from '../types'
+import { MatchSetupForm } from './MatchSetupForm'
 import './MatchesPage.css'
 
 /* ── Helpers ──────────────────────────────────────────────── */
@@ -52,16 +53,19 @@ function StatusPill({ status }: { status: string }) {
 function MatchRow({
   match,
   onClick,
+  onEditSetup,
 }: {
   match: Match
   onClick: () => void
+  onEditSetup: () => void
 }) {
   const [t0, t1] = match.teams
   const s0 = match.scores?.[0]
   const s1 = match.scores?.[1]
 
   return (
-    <button className="mp-match" onClick={onClick}>
+    <article className="mp-match">
+      <button className="mp-match__open" onClick={onClick} aria-label={`View ${t0.name} versus ${t1.name}`}>
       <div className="mp-match__status">
         <StatusPill status={match.status} />
       </div>
@@ -98,6 +102,12 @@ function MatchRow({
         <span>{match.tournament}</span>
         <span className="mp-match__sep">·</span>
         <span>{match.format}</span>
+        {match.setup && (
+          <>
+            <span className="mp-match__sep">·</span>
+            <span>{match.setup.oversPerInnings} overs per innings</span>
+          </>
+        )}
         <span className="mp-match__sep">·</span>
         <span>{match.venue}</span>
         <span className="mp-match__sep">·</span>
@@ -109,13 +119,27 @@ function MatchRow({
       )}
 
       <span className="mp-match__arrow">→</span>
-    </button>
+      </button>
+      {match.status === 'upcoming' && (
+        <button className="mp-button mp-button--quiet mp-match__edit" onClick={onEditSetup}>
+          Edit Setup
+        </button>
+      )}
+    </article>
   )
 }
 
 /* ── Match detail / scorecard ─────────────────────────────── */
 
-function MatchDetail({ match, onBack }: { match: Match; onBack: () => void }) {
+function MatchDetail({
+  match,
+  onBack,
+  onEditSetup,
+}: {
+  match: Match
+  onBack: () => void
+  onEditSetup: () => void
+}) {
   const [scorecard, setScorecard] = useState<Scorecard | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
@@ -141,7 +165,12 @@ function MatchDetail({ match, onBack }: { match: Match; onBack: () => void }) {
 
   return (
     <div className="mp-detail">
-      <button className="mp-back" onClick={onBack}>← Back to matches</button>
+      <div className="mp-detail__actions">
+        <button className="mp-back" onClick={onBack}>← Back to matches</button>
+        {match.status === 'upcoming' && (
+          <button className="mp-button" onClick={onEditSetup}>Edit Setup</button>
+        )}
+      </div>
 
       {/* Match summary header */}
       <div className="mp-detail__header">
@@ -174,6 +203,22 @@ function MatchDetail({ match, onBack }: { match: Match; onBack: () => void }) {
 
         {match.result && (
           <div className="mp-detail__result">🏆 {match.result}</div>
+        )}
+        {match.setup && (
+          <div className="mp-detail__setup">
+            <strong>{match.setup.oversPerInnings} overs per innings</strong>
+            <span>
+              Toss: {match.teams.find((team) => team.id === match.setup?.tossWinnerTeamId)?.name ?? 'Team'} chose to {match.setup.tossDecision}
+            </span>
+            {match.setup.playingXIs.map((xi) => {
+              const team = match.teams.find((item) => item.id === xi.teamId)
+              return (
+                <span key={xi.teamId}>
+                  {team?.name ?? 'Team'} — Captain: {xi.captainName ?? xi.selectedPlayers?.find((player) => player.id === xi.captainId)?.name ?? 'Not set'} · Wicketkeeper: {xi.wicketkeeperName ?? xi.selectedPlayers?.find((player) => player.id === xi.wicketkeeperId)?.name ?? 'Not set'} · XI: {xi.selectedPlayers?.map((player) => player.name).join(', ') ?? `${xi.playerIds.length} selected players`}
+                </span>
+              )
+            })}
+          </div>
         )}
       </div>
 
@@ -269,37 +314,118 @@ const FILTERS: { id: Filter; label: string }[] = [
 
 /* ── Main page ────────────────────────────────────────────── */
 
-export function MatchesPage({ initialFilter = 'all' }: { initialFilter?: Filter }) {
+export function MatchesPage({
+  initialFilter = 'all',
+  initialMatchId,
+  initialEditSetup = false,
+  initialCreate = false,
+  onInitialActionHandled,
+  onManageTeams,
+}: {
+  initialFilter?: Filter
+  initialMatchId?: string
+  initialEditSetup?: boolean
+  initialCreate?: boolean
+  onInitialActionHandled?: () => void
+  onManageTeams?: () => void
+}) {
   const [matches, setMatches]   = useState<Match[] | null>(null)
   const [selected, setSelected] = useState<Match | null>(null)
   const [filter, setFilter]     = useState<Filter>(initialFilter)
   const [error, setError]       = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState<Match | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     matchesApi.list()
-      .then((ms) => { if (!cancelled) setMatches(ms) })
-      .catch((e) => { if (!cancelled) setError(String(e)) })
+      .then((ms) => { if (!cancelled) { setMatches(ms); setError(null) } })
+      .catch((e) => { if (!cancelled) { setMatches(null); setError(e instanceof Error ? e.message : 'Unable to load matches.') } })
     return () => { cancelled = true }
   }, [])
 
-  if (selected) {
-    return <MatchDetail match={selected} onBack={() => setSelected(null)} />
+  useEffect(() => {
+    if (initialCreate) {
+      setCreating(true)
+      onInitialActionHandled?.()
+      return
+    }
+    if (!initialMatchId || !matches) return
+    const match = matches.find((item) => item.id === initialMatchId)
+    if (match) {
+      if (initialEditSetup && match.status === 'upcoming') setEditing(match)
+      else setSelected(match)
+    }
+    onInitialActionHandled?.()
+  }, [initialCreate, initialEditSetup, initialMatchId, matches, onInitialActionHandled])
+
+  function saveMatch(saved: Match) {
+    setMatches((current) => current
+      ? current.some((item) => item.id === saved.id)
+        ? current.map((item) => item.id === saved.id ? saved : item)
+        : [saved, ...current]
+      : [saved])
+    setCreating(false)
+    setEditing(null)
+    setSelected(saved)
+    setError(null)
+    setNotice(`Match between ${saved.teams[0].name} and ${saved.teams[1].name} saved successfully.`)
   }
 
+  if (selected) {
+    return (
+      <MatchDetail
+        match={selected}
+        onBack={() => setSelected(null)}
+        onEditSetup={() => { setEditing(selected); setSelected(null) }}
+      />
+    )
+  }
+
+  const normalMatches = (matches ?? []).filter((match) => !match.isDemo)
   const visible =
     filter === 'all'
-      ? matches ?? []
-      : (matches ?? []).filter((m) => m.status === filter)
+      ? normalMatches
+      : normalMatches.filter((match) => match.status === filter)
 
   return (
     <div className="mp-page">
       <div className="mp-page__header">
-        <h2 className="mp-page__title">Matches</h2>
-        <p className="mp-page__subtitle">
-          All matches — click for the available scorecard and recorded result.
-        </p>
+        <div>
+          <h2 className="mp-page__title">Matches</h2>
+          <p className="mp-page__subtitle">
+            Manage match schedules, playing XIs, toss details, and scorecards.
+          </p>
+        </div>
+        <button className="mp-button" onClick={() => { setCreating((value) => !value); setEditing(null); setNotice(null) }}>
+          {creating ? 'Cancel' : 'Create Match'}
+        </button>
       </div>
+
+      {notice && <p className="mp-success" role="status">{notice}</p>}
+      {error && (
+        <div className="mp-error" role="alert">
+          ⚠ {error}
+          <button className="mp-retry" onClick={() => {
+            setMatches(null)
+            setError(null)
+            matchesApi.list()
+              .then(setMatches)
+              .catch((cause) => setError(cause instanceof Error ? cause.message : 'Unable to load matches.'))
+          }}>Retry</button>
+        </div>
+      )}
+      {creating && <MatchSetupForm onCancel={() => setCreating(false)} onSaved={saveMatch} onManageTeams={onManageTeams} />}
+      {editing && (
+        <MatchSetupForm
+          key={editing.id}
+          match={editing}
+          onCancel={() => setEditing(null)}
+          onSaved={saveMatch}
+          onManageTeams={onManageTeams}
+        />
+      )}
 
       {/* Filter tabs */}
       <nav className="mp-filters" role="tablist" aria-label="Match filter">
@@ -315,30 +441,35 @@ export function MatchesPage({ initialFilter = 'all' }: { initialFilter?: Filter 
             {matches && (
               <span className="mp-filter-count">
                 {f.id === 'all'
-                  ? matches.length
-                  : matches.filter((m) => m.status === f.id).length}
+                  ? normalMatches.length
+                  : normalMatches.filter((m) => m.status === f.id).length}
               </span>
             )}
           </button>
         ))}
       </nav>
 
-      {error && <div className="mp-error">⚠ {error}</div>}
-
-      {matches === null ? (
+      {matches === null && !error ? (
         <SectionCard title="Loading…">
           <LoadingRows rows={5} />
         </SectionCard>
-      ) : visible.length === 0 ? (
+      ) : matches === null ? null : visible.length === 0 ? (
         <EmptyState
           icon="🏏"
-          title={`No ${filter === 'all' ? '' : filter} matches`}
-          hint="Matches will appear here once they are created in the backend."
+          title={normalMatches.length === 0 ? 'No matches yet' : `No ${filter === 'all' ? '' : filter} matches`}
+          hint={normalMatches.length === 0
+            ? 'Create a match using your saved teams and playing XIs. Matches are stored in the database.'
+            : 'Matches will appear here when their status matches this filter.'}
         />
       ) : (
         <div className="mp-list">
           {visible.map((m) => (
-            <MatchRow key={m.id} match={m} onClick={() => setSelected(m)} />
+            <MatchRow
+              key={m.id}
+              match={m}
+              onClick={() => setSelected(m)}
+              onEditSetup={() => { setEditing(m); setNotice(null) }}
+            />
           ))}
         </div>
       )}

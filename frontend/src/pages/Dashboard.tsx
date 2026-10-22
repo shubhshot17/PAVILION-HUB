@@ -11,8 +11,18 @@ import type { DashboardData } from "../types";
 import { CalendarIcon, BallIcon } from "../components/icons";
 import "./Dashboard.css";
 
-export function Dashboard({ onNavigate }: { onNavigate?: (page: string) => void }) {
-  const [data, setData] = useState<(DashboardData & { isDemo: boolean }) | null>(null);
+export function Dashboard({
+  onNavigate,
+  onViewMatch,
+  onEditSetup,
+  onCreateMatch,
+}: {
+  onNavigate?: (page: string) => void
+  onViewMatch?: (id: string) => void
+  onEditSetup?: (id: string) => void
+  onCreateMatch?: () => void
+}) {
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,14 +48,14 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: string) => void 
   if (error) return <div className="dashboard dashboard--error">⚠ {error}</div>;
   if (!data) return null;
 
-  const { liveMatches, upcoming, recent, standings } = data;
+  const { liveMatches, upcoming, recent, standings, teamCount } = data;
 
   return (
     <div className="dashboard">
       {/* ---------- Welcome hero ---------- */}
       <section className="welcome">
         <div className="welcome__text">
-          <span className="welcome__eyebrow">Season 2026 · {data.isDemo ? '⚠ Demo workspace' : 'Backend workspace'}</span>
+          <span className="welcome__eyebrow">Live cricket data · Backend workspace</span>
           <h1>
             Welcome back to <span className="welcome__brand">PAVILION HUB</span>
           </h1>
@@ -63,7 +73,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: string) => void 
               <span>Upcoming</span>
             </div>
             <div className="welcome__stat">
-              <strong>{standings.length}</strong>
+              <strong>{teamCount}</strong>
               <span>Teams</span>
             </div>
           </div>
@@ -71,7 +81,23 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: string) => void 
         <div className="welcome__orb" aria-hidden="true">
           <BallIcon size={64} />
         </div>
+        <button className="dashboard__create-match" onClick={onCreateMatch ?? (() => onNavigate?.("matches"))}>
+          Create Match
+        </button>
       </section>
+
+      {teamCount === 0 && (
+        <SectionCard title="Start with your teams">
+          <EmptyState
+            icon="👥"
+            title="No teams created yet"
+            hint="Add teams and their real player squads before creating a match."
+          />
+          <button className="section-link dashboard__teams-link" onClick={() => onNavigate?.("teams")}>
+            Manage Teams & Players →
+          </button>
+        </SectionCard>
+      )}
 
       {/* ---------- Live matches ---------- */}
       <SectionCard
@@ -96,7 +122,10 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: string) => void 
         ) : (
           <div className="dashboard__grid dashboard__grid--live">
             {liveMatches.map((m) => (
-              <MatchCard key={m.id} match={m} />
+              <div className="dashboard__match-actions" key={m.id}>
+                <MatchCard match={m} />
+                <button className="section-link" onClick={() => onViewMatch?.(m.id)}>View Match →</button>
+              </div>
             ))}
           </div>
         )}
@@ -118,28 +147,28 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: string) => void 
             <ul className="fixture-list">
               {upcoming.map((m) => (
                 <li className="fixture" key={m.id}>
-                  <div className="fixture__teams">
-                    <span
-                      className="fixture__badge"
-                      style={{ background: m.teams[0].color }}
-                    >
-                      {m.teams[0].shortName}
-                    </span>
-                    <span className="fixture__vs">vs</span>
-                    <span
-                      className="fixture__badge"
-                      style={{ background: m.teams[1].color }}
-                    >
-                      {m.teams[1].shortName}
-                    </span>
-                    <span className="fixture__names">
-                      {m.teams[0].name} <em>vs</em> {m.teams[1].name}
-                    </span>
+                  <div className="fixture__main">
+                    <div className="fixture__teams">
+                      <span className="fixture__badge" style={{ background: m.teams[0].color }}>
+                        {m.teams[0].shortName}
+                      </span>
+                      <span className="fixture__vs">vs</span>
+                      <span className="fixture__badge" style={{ background: m.teams[1].color }}>
+                        {m.teams[1].shortName}
+                      </span>
+                      <span className="fixture__names">
+                        {m.teams[0].name} <em>vs</em> {m.teams[1].name}
+                      </span>
+                    </div>
+                    <div className="fixture__actions">
+                      <button className="section-link" onClick={() => onViewMatch?.(m.id)}>View Match</button>
+                      <button className="section-link" onClick={() => onEditSetup?.(m.id)}>Edit Setup</button>
+                    </div>
                   </div>
                   <div className="fixture__info">
                     <span>{formatDateTime(m.date)}</span>
                     <span className="fixture__venue">
-                      {m.venue} · {m.format}
+                      {m.venue} · {m.format}{m.setup ? ` · ${m.setup.oversPerInnings} overs` : ''}
                     </span>
                   </div>
                 </li>
@@ -170,6 +199,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: string) => void 
                     <span className="result__outcome">{m.result}</span>
                   </div>
                   <span className="result__meta">{m.tournament}</span>
+                  <button className="section-link" onClick={() => onViewMatch?.(m.id)}>View Match</button>
                 </li>
               ))}
             </ul>
@@ -180,7 +210,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: string) => void 
       {/* ---------- Standings preview ---------- */}
       <SectionCard
         title="Tournament Standings"
-        subtitle="Monsoon Premier Cup · League stage"
+        subtitle="Current tournament standings"
         action={
           <button
             type="button"
@@ -203,9 +233,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: string) => void 
       </SectionCard>
 
       <footer className="dashboard__footer">
-        <CalendarIcon size={14} /> {data.isDemo
-          ? '⚠ Demo data — backend not connected. All scores are fictional.'
-          : 'Data loaded from the configured backend. Verify whether records are demo or production data.'}
+        <CalendarIcon size={14} /> Data loaded from the configured backend.
       </footer>
     </div>
   );

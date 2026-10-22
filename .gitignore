@@ -36,6 +36,7 @@ bower_components
 
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
+**/build/
 
 # Dependency directories
 node_modules/
@@ -73,10 +74,11 @@ backend/data/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
-python-ai-service/.venv/
-python-ai-service/__pycache__/
-python-ai-service/**/*.py[cod]
-python-ai-service/.pytest_cache/
+**/.venv/
+**/venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
 python-ai-service/artifacts/
 
 # Capacitor / Android build outputs
@@ -91,6 +93,13 @@ frontend/android/app/src/main/assets/capacitor.plugins.json
 # NEVER commit signing keys or passwords
 *.keystore
 *.jks
+*.p12
+*.pfx
+*.pem
+*.key
+*.ppk
+id_rsa
+id_ed25519
 keystore.properties
 
 # parcel-bundler cache (https://parceljs.org/)

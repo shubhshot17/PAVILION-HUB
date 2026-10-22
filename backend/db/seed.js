@@ -2,33 +2,33 @@ import { database } from './database.js'
 
 database.transaction(() => {
   database.exec(`
-    INSERT OR IGNORE INTO teams (id, name, short_name, color) VALUES
-      ('demo-team-rangers', 'Westport Rangers', 'WPR', '#c6f24e'),
-      ('demo-team-falcons', 'Eastvale Falcons', 'EVF', '#7fd8ff');
+    INSERT OR IGNORE INTO teams (id, name, short_name, color, is_demo) VALUES
+      ('demo-team-rangers', 'Westport Rangers', 'WPR', '#c6f24e', 1),
+      ('demo-team-falcons', 'Eastvale Falcons', 'EVF', '#7fd8ff', 1);
 
-    INSERT OR IGNORE INTO players (id, team_id, name, role, jersey_number) VALUES
-      ('demo-player-ranger', 'demo-team-rangers', 'Alex Rivers', 'batter', 7),
-      ('demo-player-falcon', 'demo-team-falcons', 'Sam Taylor', 'bowler', 12);
+    INSERT OR IGNORE INTO players (id, team_id, name, role, jersey_number, is_demo) VALUES
+      ('demo-player-ranger', 'demo-team-rangers', 'Alex Rivers', 'batter', 7, 1),
+      ('demo-player-falcon', 'demo-team-falcons', 'Sam Taylor', 'bowler', 12, 1);
 
-    INSERT OR IGNORE INTO tournaments (id, name, season, format, is_active)
-    VALUES ('demo-tournament', 'National Premier T20 Cup', '2026', 'T20', 1);
+    INSERT OR IGNORE INTO tournaments (id, name, season, format, is_active, is_demo)
+    VALUES ('demo-tournament', 'National Premier T20 Cup', '2026', 'T20', 1, 1);
 
     INSERT OR IGNORE INTO tournament_registrations (id, tournament_id, team_id) VALUES
       ('demo-registration-rangers', 'demo-tournament', 'demo-team-rangers'),
       ('demo-registration-falcons', 'demo-tournament', 'demo-team-falcons');
 
     INSERT OR IGNORE INTO fixtures (
-      id, tournament_id, home_team_id, away_team_id, scheduled_at, venue, status
+      id, tournament_id, home_team_id, away_team_id, scheduled_at, venue, status, is_demo
     ) VALUES (
       'demo-fixture', 'demo-tournament', 'demo-team-rangers', 'demo-team-falcons',
-      '2026-10-21T19:00:00Z', 'Westport Oval', 'completed'
+      '2026-10-21T19:00:00Z', 'Westport Oval', 'completed', 1
     );
 
     INSERT OR IGNORE INTO matches (
-      id, tournament_id, fixture_id, format, venue, started_at, status, result
+      id, tournament_id, fixture_id, format, venue, started_at, status, result, is_demo
     ) VALUES (
       'demo-match', 'demo-tournament', 'demo-fixture', 'T20', 'Westport Oval',
-      '2026-10-21T19:00:00Z', 'completed', 'Westport Rangers won by 4 runs'
+      '2026-10-21T19:00:00Z', 'completed', 'Westport Rangers won by 4 runs', 1
     );
 
     UPDATE matches
