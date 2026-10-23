@@ -141,6 +141,12 @@ export function validatePlayer(data) {
     && (!Number.isInteger(data.jerseyNumber) || data.jerseyNumber < 0 || data.jerseyNumber > 999)) {
     throw new HttpError(400, 'jerseyNumber must be an integer between 0 and 999')
   }
+  for (const field of ['battingStyle', 'bowlingStyle']) {
+    if (data[field] !== undefined && data[field] !== null
+      && (typeof data[field] !== 'string' || data[field].trim().length > 100)) {
+      throw new HttpError(400, `${field} must be a string of at most 100 characters`)
+    }
+  }
   for (const field of ['isCaptain', 'isWicketkeeper']) {
     if (data[field] !== undefined && typeof data[field] !== 'boolean') {
       throw new HttpError(400, `${field} must be a boolean`)

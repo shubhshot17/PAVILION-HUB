@@ -9,8 +9,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "setup": "node db/migrate.js",
     "db:migrate": "node db/migrate.js",
-    "db:seed": "node db/seed.js",
+    "db:seed:demo": "node db/seed.js",
     "test": "node --test"
   },
   "dependencies": {

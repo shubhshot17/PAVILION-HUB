@@ -15,7 +15,8 @@ import {
   EmptyState,
 } from '../components/SectionCard'
 import { teamsApi, playersApi } from '../services/api'
-import type { Team, Player, PlayerStats, TeamProfile } from '../types'
+import type { Team, Player, PlayerRole, PlayerStats, TeamProfile } from '../types'
+import { BATTING_STYLES, BOWLING_STYLES } from '../types'
 import './TeamsPage.css'
 
 /* ── Helpers ──────────────────────────────────────────────── */
@@ -58,6 +59,16 @@ function RolePill({ role }: { role: string }) {
   )
 }
 
+function initialsOf(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 8)
+    .toUpperCase()
+}
+
 function TeamForm({
   team,
   onSave,
@@ -75,14 +86,30 @@ function TeamForm({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  /** Mirrors the backend rules so mistakes are caught before a round trip. */
+  function validate(): string | null {
+    if (!name.trim()) return 'Enter a team name.'
+    if (name.trim().length > 100) return 'Team name must be at most 100 characters.'
+    if (shortName.trim().length > 12) return 'Short name must be at most 12 characters.'
+    if (city.trim().length > 100) return 'City must be at most 100 characters.'
+    if (homeGround.trim().length > 100) return 'Home ground must be at most 100 characters.'
+    if (!/^#[\da-f]{6}$/i.test(color)) return 'Choose a valid team color.'
+    return null
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const problem = validate()
+    if (problem) {
+      setError(problem)
+      return
+    }
     setSaving(true)
     setError(null)
     try {
       const data = {
         name: name.trim(),
-        shortName: shortName.trim(),
+        shortName: shortName.trim() || initialsOf(name),
         color,
         city: city.trim(),
         homeGround: homeGround.trim(),
@@ -117,7 +144,7 @@ function TeamForm({
           maxLength={12}
           value={shortName}
           onChange={(event) => setShortName(event.target.value)}
-          placeholder="Generated from the team name"
+          placeholder={initialsOf(name) || 'Generated from the team name'}
         />
       </label>
       <label>
@@ -148,26 +175,69 @@ function TeamForm({
 function PlayerForm({
   teamId,
   player,
+  teammates,
   onSave,
   onCancel,
 }: {
   teamId: string
   player?: Player
+  /** Other squad members, used for client-side conflict hints. */
+  teammates: Player[]
   onSave: (player: Player) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState(player?.name ?? '')
-  const [role, setRole] = useState<Player['role']>(player?.role ?? 'all-rounder')
+  const [role, setRole] = useState<PlayerRole>(player?.role ?? 'all-rounder')
   const [jerseyNumber, setJerseyNumber] = useState(
-    player?.jerseyNumber === undefined ? '' : String(player.jerseyNumber),
+    player?.jerseyNumber === undefined || player?.jerseyNumber === null
+      ? ''
+      : String(player.jerseyNumber),
   )
+  const [battingStyle, setBattingStyle] = useState(player?.battingStyle ?? '')
+  const [bowlingStyle, setBowlingStyle] = useState(player?.bowlingStyle ?? '')
   const [isCaptain, setIsCaptain] = useState(player?.isCaptain ?? false)
   const [isWicketkeeper, setIsWicketkeeper] = useState(player?.isWicketkeeper ?? false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const otherCaptain = teammates.find((entry) => entry.isCaptain)
+  const otherKeeper = teammates.find((entry) => entry.isWicketkeeper)
+
+  /** Mirrors the backend rules so mistakes are caught before a round trip. */
+  function validate(): string | null {
+    const trimmedName = name.trim()
+    if (!trimmedName) return 'Enter the player name.'
+    if (trimmedName.length > 100) return 'Player name must be at most 100 characters.'
+    if (teammates.some((entry) => entry.name.trim().toLowerCase() === trimmedName.toLowerCase())) {
+      return `A player named "${trimmedName}" already exists on this team.`
+    }
+    if (jerseyNumber !== '') {
+      const parsed = Number(jerseyNumber)
+      if (!Number.isInteger(parsed) || parsed < 0 || parsed > 999) {
+        return 'Jersey number must be a whole number between 0 and 999.'
+      }
+      if (teammates.some((entry) => entry.jerseyNumber === parsed)) {
+        return `Jersey number ${parsed} is already used on this team.`
+      }
+    }
+    if (battingStyle.trim().length > 100) return 'Batting style must be at most 100 characters.'
+    if (bowlingStyle.trim().length > 100) return 'Bowling style must be at most 100 characters.'
+    if (isCaptain && otherCaptain) {
+      return `${otherCaptain.name} is already captain. Unset them before choosing a new captain.`
+    }
+    if (isWicketkeeper && otherKeeper) {
+      return `${otherKeeper.name} is already the wicketkeeper. Unset them before choosing a new one.`
+    }
+    return null
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const problem = validate()
+    if (problem) {
+      setError(problem)
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -176,6 +246,8 @@ function PlayerForm({
         name: name.trim(),
         role,
         jerseyNumber: jerseyNumber === '' ? null : Number(jerseyNumber),
+        battingStyle: battingStyle.trim(),
+        bowlingStyle: bowlingStyle.trim(),
         isCaptain,
         isWicketkeeper,
       }
@@ -191,7 +263,7 @@ function PlayerForm({
   }
 
   return (
-    <form className="tp-form tp-form--player" onSubmit={submit}>
+    <form className="tp-form tp-form--player" onSubmit={submit} noValidate>
       <h3>{player ? 'Edit player' : 'Add a player'}</h3>
       <label>
         Player name <span aria-hidden="true">*</span>
@@ -201,11 +273,13 @@ function PlayerForm({
           value={name}
           onChange={(event) => setName(event.target.value)}
           autoComplete="name"
+          placeholder="e.g. Jordan Lee"
+          aria-invalid={Boolean(error) || undefined}
         />
       </label>
       <label>
         Playing role
-        <select value={role} onChange={(event) => setRole(event.target.value as Player['role'])}>
+        <select value={role} onChange={(event) => setRole(event.target.value as PlayerRole)}>
           <option value="batter">Batter</option>
           <option value="bowler">Bowler</option>
           <option value="all-rounder">All-rounder</option>
@@ -222,11 +296,44 @@ function PlayerForm({
           inputMode="numeric"
           value={jerseyNumber}
           onChange={(event) => setJerseyNumber(event.target.value)}
+          placeholder="e.g. 18"
         />
       </label>
+      <label>
+        Batting style <span className="tp-form__optional">(optional)</span>
+        <input
+          list="tp-batting-styles"
+          maxLength={100}
+          value={battingStyle}
+          onChange={(event) => setBattingStyle(event.target.value)}
+          placeholder="e.g. Right-hand bat"
+        />
+      </label>
+      <label>
+        Bowling style <span className="tp-form__optional">(optional)</span>
+        <input
+          list="tp-bowling-styles"
+          maxLength={100}
+          value={bowlingStyle}
+          onChange={(event) => setBowlingStyle(event.target.value)}
+          placeholder="e.g. Right-arm fast"
+        />
+      </label>
+      <datalist id="tp-batting-styles">
+        {BATTING_STYLES.map((style) => <option key={style} value={style} />)}
+      </datalist>
+      <datalist id="tp-bowling-styles">
+        {BOWLING_STYLES.map((style) => <option key={style} value={style} />)}
+      </datalist>
       <div className="tp-form__checks">
-        <label><input type="checkbox" checked={isCaptain} onChange={(event) => setIsCaptain(event.target.checked)} /> Captain</label>
-        <label><input type="checkbox" checked={isWicketkeeper} onChange={(event) => setIsWicketkeeper(event.target.checked)} /> Wicketkeeper</label>
+        <label>
+          <input type="checkbox" checked={isCaptain} onChange={(event) => setIsCaptain(event.target.checked)} />
+          Captain{otherCaptain && !isCaptain ? ` (currently ${otherCaptain.name})` : ''}
+        </label>
+        <label>
+          <input type="checkbox" checked={isWicketkeeper} onChange={(event) => setIsWicketkeeper(event.target.checked)} />
+          Wicketkeeper{otherKeeper && !isWicketkeeper ? ` (currently ${otherKeeper.name})` : ''}
+        </label>
       </div>
       {error && <p className="tp-error" role="alert">{error}</p>}
       <div className="tp-form__actions">
@@ -279,12 +386,13 @@ function PlayerProfile({
           <h3 className="tp-profile__name">{player.name}</h3>
           <div className="tp-profile__sub">
             <RolePill role={player.role} />
-            {player.jerseyNumber !== undefined && (
+            {typeof player.jerseyNumber === 'number' && (
               <span className="tp-profile__jersey">#{player.jerseyNumber}</span>
             )}
+            {player.isCaptain && <span className="tp-player-badge">Captain</span>}
+            {player.isWicketkeeper && <span className="tp-player-badge">Wicketkeeper</span>}
             {player.battingStyle && <span className="tp-profile__style">{player.battingStyle}</span>}
             {player.bowlingStyle && <span className="tp-profile__style">{player.bowlingStyle}</span>}
-            {player.isDemo && <span className="tp-demo-badge">DEMO</span>}
           </div>
         </div>
       </div>
@@ -432,18 +540,32 @@ function TeamProfileView({
   }
 
   function savePlayer(player: Player) {
-    setProfile((current) => current
-      ? {
-          ...current,
-          players: current.players.some(({ id }) => id === player.id)
-            ? current.players.map((existing) => existing.id === player.id ? player : existing)
-            : [...current.players, player].sort((left, right) => left.name.localeCompare(right.name)),
+    const wasEditing = Boolean(editingPlayer)
+    setProfile((current) => {
+      if (!current) return current
+      const exists = current.players.some(({ id }) => id === player.id)
+      const players = exists
+        ? current.players.map((existing) => existing.id === player.id ? player : existing)
+        : [...current.players, player]
+      // The API keeps at most one captain / wicketkeeper per team; mirror that
+      // locally so list badges and the form hints stay accurate.
+      const normalized = players.map((existing) => {
+        if (existing.id === player.id) return existing
+        if (player.isCaptain && existing.isCaptain) return { ...existing, isCaptain: false }
+        if (player.isWicketkeeper && existing.isWicketkeeper) {
+          return { ...existing, isWicketkeeper: false }
         }
-      : current)
+        return existing
+      })
+      return {
+        ...current,
+        players: normalized.sort((left, right) => left.name.localeCompare(right.name)),
+      }
+    })
     setAddingPlayer(false)
     setEditingPlayer(null)
     setActionError(null)
-    setNotice(`${player.name} was ${editingPlayer ? 'updated' : 'added'} successfully.`)
+    setNotice(`${player.name} was ${wasEditing ? 'updated' : 'added'} successfully.`)
   }
 
   return (
@@ -513,14 +635,15 @@ function TeamProfileView({
             title="Squad"
             subtitle="Players belonging to this team"
             action={
-              <button className="tp-button" onClick={() => { setAddingPlayer(true); setEditingPlayer(null) }}>
-                Add player
+              <button className="tp-button" onClick={() => { setAddingPlayer((value) => !value); setEditingPlayer(null) }}>
+                {addingPlayer ? 'Cancel' : 'Add player'}
               </button>
             }
           >
             {addingPlayer && (
               <PlayerForm
                 teamId={team.id}
+                teammates={profile.players.filter((player) => !player.isDemo && player.id !== editingPlayer?.id)}
                 onCancel={() => setAddingPlayer(false)}
                 onSave={savePlayer}
               />
@@ -530,12 +653,13 @@ function TeamProfileView({
                 key={editingPlayer.id}
                 teamId={team.id}
                 player={editingPlayer}
+                teammates={profile.players.filter((player) => !player.isDemo && player.id !== editingPlayer.id)}
                 onCancel={() => setEditingPlayer(null)}
                 onSave={savePlayer}
               />
             )}
             {profile.players.filter((player) => !player.isDemo).length === 0 && !addingPlayer ? (
-              <EmptyState icon="👤" title="No players yet" hint="Add your team's first player to build its squad." />
+              <EmptyState icon="👤" title="No players yet" hint="Add your team's first player to build its squad. Players are saved to the database." />
             ) : (
               <ul className="tp-player-list">
                 {profile.players.filter((player) => !player.isDemo).map((p) => (
@@ -546,11 +670,18 @@ function TeamProfileView({
                           <span className="tp-player-btn__avatar" style={{ background: ROLE_COLORS[p.role] ?? '#888' }}>
                             {p.name.charAt(0)}
                           </span>
-                          <span className="tp-player-btn__name">
-                            {p.name}
-                            {typeof p.jerseyNumber === 'number' && <span className="tp-player-btn__num"> #{p.jerseyNumber}</span>}
-                            {p.isCaptain && <span className="tp-player-badge">Captain</span>}
-                            {p.isWicketkeeper && <span className="tp-player-badge">Wicketkeeper</span>}
+                          <span className="tp-player-btn__text">
+                            <span className="tp-player-btn__name">
+                              {p.name}
+                              {typeof p.jerseyNumber === 'number' && <span className="tp-player-btn__num"> #{p.jerseyNumber}</span>}
+                              {p.isCaptain && <span className="tp-player-badge">Captain</span>}
+                              {p.isWicketkeeper && <span className="tp-player-badge">Wicketkeeper</span>}
+                            </span>
+                            {(p.battingStyle || p.bowlingStyle) && (
+                              <span className="tp-player-btn__styles">
+                                {[p.battingStyle, p.bowlingStyle].filter(Boolean).join(' · ')}
+                              </span>
+                            )}
                           </span>
                         </div>
                         <div className="tp-player-btn__right">
@@ -722,6 +853,9 @@ export function TeamsPage() {
       setTeams((current) => current?.filter(({ id }) => id !== team.id) ?? [])
       if (selected?.id === team.id) setSelected(null)
       setNotice(`Team "${team.name}" was deleted.`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to delete this team.')
+      throw cause
     } finally {
       setDeletingTeamId(null)
     }

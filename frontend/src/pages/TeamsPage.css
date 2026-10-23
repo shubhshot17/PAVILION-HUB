@@ -481,6 +481,12 @@
   min-width: 0;
 }
 
+.tp-player-btn__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .tp-player-btn__avatar {
   width: 34px;
   height: 34px;
@@ -495,8 +501,21 @@
 }
 
 .tp-player-btn__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   font-weight: 600;
   font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tp-player-btn__styles {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: var(--white-dim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

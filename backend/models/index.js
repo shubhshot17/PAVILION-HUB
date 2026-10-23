@@ -22,7 +22,10 @@ function playerRecord(row) {
     teamId: row.team_id,
     name: row.name,
     role: row.role,
-    ...(row.jersey_number === null ? {} : { jerseyNumber: row.jersey_number }),
+    ...(row.jersey_number === null || row.jersey_number === undefined
+      ? {} : { jerseyNumber: row.jersey_number }),
+    ...(row.batting_style ? { battingStyle: row.batting_style } : {}),
+    ...(row.bowling_style ? { bowlingStyle: row.bowling_style } : {}),
     isCaptain: Boolean(row.is_captain ?? 0),
     isWicketkeeper: Boolean(row.is_wicketkeeper ?? 0),
     isActive: Boolean(row.is_active ?? 1),
@@ -599,18 +602,22 @@ export const teams = {
     return this.get(teamId)
   },
   update(teamId, data) {
-    if (!this.get(teamId)) return null
+    const existing = this.get(teamId)
+    if (!existing) return null
+    // Partial PATCH bodies (e.g. { name }) must not wipe the other fields.
+    const pick = (field, fallback) => (data[field] === undefined ? fallback : data[field])
+    const name = pick('name', existing.name)
     database.prepare(`
       UPDATE teams
       SET name = ?, short_name = ?, color = ?, city = ?, home_ground = ?
       WHERE id = ?
     `).run(
-      data.name.trim(),
-      data.shortName?.trim() || data.name.trim()
+      name.trim(),
+      pick('shortName', existing.shortName)?.trim() || name.trim()
         .split(/\s+/).map((part) => part[0]).join('').slice(0, 8).toUpperCase(),
-      data.color ?? '#c6f24e',
-      data.city?.trim() || null,
-      data.homeGround?.trim() || null,
+      pick('color', existing.color),
+      pick('city', existing.city)?.trim() || null,
+      pick('homeGround', existing.homeGround)?.trim() || null,
       teamId,
     )
     return this.get(teamId)
@@ -649,25 +656,43 @@ export const players = {
   create(data) {
     const playerId = id()
     database.prepare(`
-      INSERT INTO players (id, team_id, name, role, jersey_number, is_captain, is_wicketkeeper)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO players (
+        id, team_id, name, role, jersey_number, batting_style, bowling_style,
+        is_captain, is_wicketkeeper
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       playerId, data.teamId, data.name.trim(), data.role ?? 'all-rounder',
-      data.jerseyNumber ?? null, Number(data.isCaptain ?? false), Number(data.isWicketkeeper ?? false),
+      data.jerseyNumber ?? null,
+      data.battingStyle?.trim() || null,
+      data.bowlingStyle?.trim() || null,
+      Number(data.isCaptain ?? false), Number(data.isWicketkeeper ?? false),
     )
     return this.get(playerId)
   },
+  /**
+   * Updates a player. Only the caller's known fields are written so a PATCH
+   * body cannot silently clear unrelated columns; `undefined` keeps the
+   * existing value, `null` clears an optional field.
+   */
   update(playerId, data) {
-    if (!this.get(playerId)) {
+    const existing = this.get(playerId)
+    if (!existing) {
       return null
     }
+    const pick = (field, fallback) => (data[field] === undefined ? fallback : data[field])
     database.prepare(`
       UPDATE players
-      SET team_id = ?, name = ?, role = ?, jersey_number = ?, is_captain = ?, is_wicketkeeper = ?
+      SET team_id = ?, name = ?, role = ?, jersey_number = ?,
+        batting_style = ?, bowling_style = ?, is_captain = ?, is_wicketkeeper = ?
       WHERE id = ?
     `).run(
-      data.teamId, data.name.trim(), data.role ?? 'all-rounder', data.jerseyNumber ?? null,
-      Number(data.isCaptain ?? false), Number(data.isWicketkeeper ?? false), playerId,
+      data.teamId, data.name.trim(), data.role ?? 'all-rounder',
+      pick('jerseyNumber', existing.jerseyNumber ?? null),
+      pick('battingStyle', existing.battingStyle ?? null)?.trim() || null,
+      pick('bowlingStyle', existing.bowlingStyle ?? null)?.trim() || null,
+      Number(pick('isCaptain', existing.isCaptain ?? false)),
+      Number(pick('isWicketkeeper', existing.isWicketkeeper ?? false)),
+      playerId,
     )
     return this.get(playerId)
   },

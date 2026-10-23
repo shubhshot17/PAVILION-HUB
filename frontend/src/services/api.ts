@@ -144,8 +144,10 @@ export const teamsApi = {
 
 /* ── Players ────────────────────────────────────────────────── */
 
-type PlayerInput = Omit<Partial<Player>, 'jerseyNumber'> & {
+type PlayerInput = Omit<Partial<Player>, 'jerseyNumber' | 'battingStyle' | 'bowlingStyle'> & {
   jerseyNumber?: number | null
+  battingStyle?: string | null
+  bowlingStyle?: string | null
 }
 
 export const playersApi = {

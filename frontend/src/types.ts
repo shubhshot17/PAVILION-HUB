@@ -130,11 +130,34 @@ export interface Team {
   isDemo?: boolean
 }
 
+/** Allowed playing roles — mirrored by the backend validator. */
+export const PLAYER_ROLES = ['batter', 'bowler', 'all-rounder', 'wicket-keeper'] as const
+
+export type PlayerRole = (typeof PLAYER_ROLES)[number]
+
+/** Suggested values for the free-text style fields (any text is allowed). */
+export const BATTING_STYLES = [
+  'Right-hand bat',
+  'Left-hand bat',
+] as const
+
+export const BOWLING_STYLES = [
+  'Right-arm fast',
+  'Right-arm medium',
+  'Right-arm off-break',
+  'Right-arm leg-break',
+  'Left-arm fast',
+  'Left-arm medium',
+  'Left-arm orthodox',
+  'Left-arm wrist-spin',
+  'Does not bowl',
+] as const
+
 export interface Player {
   id: string
   teamId: string
   name: string
-  role: 'batter' | 'bowler' | 'all-rounder' | 'wicket-keeper'
+  role: PlayerRole
   jerseyNumber?: number
   battingStyle?: string
   bowlingStyle?: string

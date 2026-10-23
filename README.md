@@ -45,13 +45,18 @@ python-ai-service/      FastAPI + scikit-learn prediction service
 cd backend
 npm install
 Copy-Item .env.example .env
-npm run db:migrate
-npm run db:seed
+npm run setup     # creates/updates the SQLite schema (no demo data)
 npm run dev
 ```
 
 The SQLite database is created at `backend/data/pavilion.sqlite`. `npm test`
 runs API integration, persistence, and AI-proxy tests.
+
+Migrations never insert teams, players, or matches, so the app starts empty
+and every record in it is created by the user. Fictional demo records exist
+only behind the explicit `npm run db:seed:demo` command (marked `is_demo` and
+hidden from the normal interface); `npm run db:seed:demo -- --clear` removes
+them again.
 
 ### 2. Frontend (Vite dev server)
 
