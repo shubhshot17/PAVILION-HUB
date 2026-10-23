@@ -189,8 +189,31 @@ function getMatch(idValue) {
   `).all(idValue).map(teamRecord)
 
   const setup = getMatchSetup(idValue)
+  // Live/completed matches display their score from the persisted innings ledger.
+  const inningsRows = database.prepare(`
+    SELECT batting_team_id,
+      COALESCE(SUM(e.batter_runs + e.extra_runs), 0) AS runs,
+      COALESCE(SUM(CASE WHEN e.wicket_type IS NOT NULL THEN 1 ELSE 0 END), 0) AS wickets,
+      COALESCE(SUM(e.legal_ball), 0) AS legal_balls
+    FROM innings i
+    LEFT JOIN ball_by_ball_events e ON e.innings_id = i.id
+      AND NOT EXISTS (SELECT 1 FROM scoring_event_undos u WHERE u.event_id = e.id)
+    WHERE i.match_id = ?
+    GROUP BY i.id
+    ORDER BY i.innings_number
+  `).all(idValue)
+  const scores = inningsRows.length
+    ? inningsRows.map((innings) => ({
+        teamId: innings.batting_team_id,
+        runs: innings.runs,
+        wickets: innings.wickets,
+        overs: Math.floor(innings.legal_balls / 6) + (innings.legal_balls % 6) / 10,
+      }))
+    : undefined
+
   return {
     id: row.id,
+    title: row.title ?? undefined,
     tournament: row.tournament_name,
     tournamentId: row.tournament_id,
     format: row.format,
@@ -198,9 +221,14 @@ function getMatch(idValue) {
     date: row.started_at,
     status: row.status,
     teams,
+    ...(scores ? { scores: mapScoresToTeams(scores, teams) } : {}),
+    ...(row.result ? { result: row.result } : {}),
+    ...(row.is_tie ? { isTie: true } : {}),
+    ...(row.is_abandoned ? { isAbandoned: true } : {}),
+    ...(row.win_team_id ? { winTeamId: row.win_team_id } : {}),
+    ...(row.player_of_the_match_id ? { playerOfTheMatchId: row.player_of_the_match_id } : {}),
     ...(setup ? { setup } : {}),
     isDemo: Boolean(row.is_demo ?? 0),
-    ...(row.result ? { result: row.result } : {}),
   }
 }
 
@@ -214,6 +242,21 @@ function resolveMatchTeamIds(data) {
   })
 }
 
+/**
+ * Innings rows come back in batting order; score cards must be indexed by
+ * match-team order (teams[0] first) so the UI can render teams[0] vs teams[1].
+ */
+function mapScoresToTeams(scores, teams) {
+  const byTeam = new Map(scores.map((score) => [score.teamId, score]))
+  return [0, 1].map((index) => {
+    const teamId = teams[index]?.id
+    const score = byTeam.get(teamId)
+    if (!score) return undefined
+    const { teamId: _ignored, ...rest } = score
+    return rest
+  })
+}
+
 function createMatch(data) {
   const matchId = id()
   const teamIds = resolveMatchTeamIds(data)
@@ -221,9 +264,12 @@ function createMatch(data) {
   database.transaction(() => {
     const tournament = findTournament(data)
     database.prepare(`
-      INSERT INTO matches (id, tournament_id, format, venue, started_at, status, result)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(matchId, tournament.id, data.format, data.venue, data.date, data.status, data.result ?? null)
+      INSERT INTO matches (id, tournament_id, format, venue, started_at, status, result, title)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      matchId, tournament.id, data.format, data.venue, data.date, data.status,
+      data.result ?? null, data.title?.trim() || null,
+    )
     const insertTeam = database.prepare(`
       INSERT INTO match_teams (match_id, team_id, batting_order) VALUES (?, ?, ?)
     `)
@@ -255,9 +301,10 @@ function updateMatch(matchId, data) {
   database.transaction(() => {
     database.prepare(`
       UPDATE matches
-      SET tournament_id = ?, format = ?, venue = ?, started_at = ?, status = ?, result = ?
+      SET tournament_id = ?, format = ?, venue = ?, started_at = ?, status = ?, result = ?, title = ?
       WHERE id = ?
-    `).run(tournament.id, data.format, data.venue, data.date, data.status, data.result ?? null, matchId)
+    `).run(tournament.id, data.format, data.venue, data.date, data.status, data.result ?? null,
+      data.title?.trim() || null, matchId)
 
     if (!hasInnings && teamsChanged) {
       database.prepare('DELETE FROM match_teams WHERE match_id = ?').run(matchId)

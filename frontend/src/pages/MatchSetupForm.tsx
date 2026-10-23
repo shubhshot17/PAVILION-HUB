@@ -40,6 +40,7 @@ export function MatchSetupForm({
   )
   const [overs, setOvers] = useState(match?.setup?.oversPerInnings ?? 20)
   const [venue, setVenue] = useState(match?.venue ?? '')
+  const [title, setTitle] = useState(match?.title ?? '')
   const [date, setDate] = useState(toLocalDateTime(match?.date))
   const [tossWinnerTeamId, setTossWinnerTeamId] = useState(match?.setup?.tossWinnerTeamId ?? '')
   const [tossDecision, setTossDecision] = useState<'bat' | 'field'>(match?.setup?.tossDecision ?? 'bat')
@@ -139,6 +140,18 @@ export function MatchSetupForm({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
+    if (title.trim().length > 120) {
+      setError('Match title must be at most 120 characters.')
+      return
+    }
+    if (!venue.trim()) {
+      setError('Enter a venue for this match.')
+      return
+    }
+    if (Number.isNaN(new Date(date).getTime())) {
+      setError('Choose a valid match date and time.')
+      return
+    }
     if (!teamIds[0] || !teamIds[1]) {
       setError('Select two saved teams before creating a match.')
       return
@@ -164,6 +177,7 @@ export function MatchSetupForm({
     try {
       const payload: MatchInput = {
         ...(match?.tournamentId ? { tournamentId: match.tournamentId } : {}),
+        ...(title.trim() ? { title: title.trim() } : {}),
         format,
         venue: venue.trim(),
         date: new Date(date).toISOString(),
@@ -195,6 +209,17 @@ export function MatchSetupForm({
   function rosterFor(side: 0 | 1) {
     return (players ?? []).filter((player) => player.teamId === teamIds[side])
   }
+
+  function setOversAndFormat(format: 'T10' | 'T20' | 'ODI', overs: number) {
+    setFormat(format)
+    setOvers(overs)
+  }
+
+  const oversPresets: { label: string; overs: number; format: 'T10' | 'T20' | 'ODI' }[] = [
+    { label: '5 overs', overs: 5, format: 'T10' },
+    { label: '10 overs', overs: 10, format: 'T10' },
+    { label: '20 overs', overs: 20, format: 'T20' },
+  ]
 
   if (loading) {
     return <SectionCard title="Loading saved teams and players"><LoadingRows rows={6} /></SectionCard>
@@ -235,6 +260,12 @@ export function MatchSetupForm({
       ) : (
         <>
           <div className="mp-setup__grid">
+            <label className="mp-setup__title">
+              Match title <span className="mp-form-optional">(optional)</span>
+              <input maxLength={120} value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="e.g. Sunday friendly, semi-final" />
+            </label>
             <label>
               Match format
               <select value={format} onChange={(event) => {
@@ -247,11 +278,21 @@ export function MatchSetupForm({
                 <option value="ODI">ODI</option>
               </select>
             </label>
-            <label>
-              Overs per innings
+            <div className="mp-setup__overs">
+              <span className="mp-setup__overs-label">Overs per innings</span>
+              <div className="mp-setup__overs-presets" role="group" aria-label="Overs presets">
+                {oversPresets.map((preset) => (
+                  <button type="button" key={preset.overs}
+                    className={`mp-overs-preset ${overs === preset.overs && format === preset.format ? 'mp-overs-preset--active' : ''}`}
+                    onClick={() => setOversAndFormat(preset.format, preset.overs)}>
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
               <input type="number" min={1} max={FORMAT_OVERS[format]} step={1} required value={overs}
-                onChange={(event) => setOvers(Number(event.target.value))} />
-            </label>
+                onChange={(event) => setOvers(Number(event.target.value))}
+                aria-label="Custom overs per innings" />
+            </div>
             <label>
               Venue
               <input required maxLength={160} value={venue} onChange={(event) => setVenue(event.target.value)} />

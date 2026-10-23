@@ -32,6 +32,10 @@ export function validateMatch(data) {
   if (Number.isNaN(Date.parse(data.date))) {
     throw new HttpError(400, 'date must be a valid date string')
   }
+  if (data.title !== undefined && data.title !== null
+    && (typeof data.title !== 'string' || data.title.trim().length > 120)) {
+    throw new HttpError(400, 'title must be a string of at most 120 characters')
+  }
   enumValue(data, 'format', formats)
   enumValue(data, 'status', matchStatuses)
   if (!Array.isArray(data.teams) || data.teams.length !== 2

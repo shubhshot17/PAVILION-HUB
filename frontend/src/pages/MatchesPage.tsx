@@ -54,20 +54,24 @@ function MatchRow({
   match,
   onClick,
   onEditSetup,
+  onContinueScoring,
 }: {
   match: Match
   onClick: () => void
   onEditSetup: () => void
+  onContinueScoring: () => void
 }) {
   const [t0, t1] = match.teams
   const s0 = match.scores?.[0]
   const s1 = match.scores?.[1]
+  const unfinished = match.status === 'live' || match.status === 'upcoming'
 
   return (
     <article className="mp-match">
       <button className="mp-match__open" onClick={onClick} aria-label={`View ${t0.name} versus ${t1.name}`}>
       <div className="mp-match__status">
         <StatusPill status={match.status} />
+        {match.title && <span className="mp-match__title">{match.title}</span>}
       </div>
 
       <div className="mp-match__teams">
@@ -120,11 +124,18 @@ function MatchRow({
 
       <span className="mp-match__arrow">→</span>
       </button>
-      {match.status === 'upcoming' && (
-        <button className="mp-button mp-button--quiet mp-match__edit" onClick={onEditSetup}>
-          Edit Setup
-        </button>
-      )}
+      <div className="mp-match__actions">
+        {match.status === 'upcoming' && (
+          <button className="mp-button mp-button--quiet mp-match__edit" onClick={onEditSetup}>
+            Edit Setup
+          </button>
+        )}
+        {unfinished && match.setup && (
+          <button className="mp-button mp-match__score-btn" onClick={onContinueScoring}>
+            {match.status === 'live' ? 'Continue Scoring' : 'Start Scoring'}
+          </button>
+        )}
+      </div>
     </article>
   )
 }
@@ -321,6 +332,7 @@ export function MatchesPage({
   initialCreate = false,
   onInitialActionHandled,
   onManageTeams,
+  onStartScoring,
 }: {
   initialFilter?: Filter
   initialMatchId?: string
@@ -328,6 +340,8 @@ export function MatchesPage({
   initialCreate?: boolean
   onInitialActionHandled?: () => void
   onManageTeams?: () => void
+  /** Opens the ball-by-ball scoring screen for this match. */
+  onStartScoring?: (matchId: string) => void
 }) {
   const [matches, setMatches]   = useState<Match[] | null>(null)
   const [selected, setSelected] = useState<Match | null>(null)
@@ -469,6 +483,7 @@ export function MatchesPage({
               match={m}
               onClick={() => setSelected(m)}
               onEditSetup={() => { setEditing(m); setNotice(null) }}
+              onContinueScoring={() => onStartScoring?.(m.id)}
             />
           ))}
         </div>

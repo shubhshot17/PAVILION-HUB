@@ -39,6 +39,14 @@ function App() {
     setMenuOpen(false);
   };
 
+  /** Opens the ball-by-ball scoring screen for a specific match. */
+  const startScoring = (id: string) => {
+    setMatchAction({ id, edit: false });
+    setCreateMatch(false);
+    setActivePage("score");
+    setMenuOpen(false);
+  };
+
   const startMatchCreation = () => {
     setMatchAction(null);
     setCreateMatch(true);
@@ -58,7 +66,7 @@ function App() {
           />
         );
       case "score":
-        return <ScoreScreen />;
+        return <ScoreScreen initialMatchId={matchAction?.id} />;
       case "tournaments":
         return <TournamentsPage />;
       case "teams":
@@ -74,10 +82,11 @@ function App() {
               setCreateMatch(false);
             }}
             onManageTeams={() => navigate("teams")}
+            onStartScoring={(matchId) => startScoring(matchId)}
           />
         );
       case "live":
-        return <MatchesPage initialFilter="live" />;
+        return <MatchesPage initialFilter="live" onStartScoring={(matchId) => startScoring(matchId)} />;
       default:
         return (
           <div className="app-shell__placeholder">

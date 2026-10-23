@@ -586,3 +586,78 @@
     flex-direction: column;
   }
 }
+/* ── Match title row ──────────────────────────────────────── */
+.mp-match__title {
+  margin-left: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--white-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-match__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.mp-match__score-btn {
+  background: var(--lime);
+  border-color: var(--lime);
+  color: var(--green-950);
+}
+
+/* ── Setup form: title + overs presets ────────────────────── */
+.mp-setup__title {
+  grid-column: 1 / -1;
+}
+
+.mp-form-optional {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.mp-setup__overs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--white);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.mp-setup__overs-label {
+  display: block;
+}
+
+.mp-setup__overs-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mp-overs-preset {
+  min-height: 34px;
+  padding: 5px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--white);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mp-overs-preset:hover {
+  border-color: rgba(198, 242, 78, 0.5);
+}
+
+.mp-overs-preset--active {
+  border-color: var(--lime);
+  background: rgba(198, 242, 78, 0.15);
+  color: var(--lime);
+}

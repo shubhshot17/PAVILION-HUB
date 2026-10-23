@@ -36,6 +36,8 @@ export interface MatchSetup {
 
 export interface Match {
   id: string
+  /** Optional user-chosen name, e.g. "Sunday friendly". */
+  title?: string
   tournament: string
   tournamentId?: string
   format: MatchFormat

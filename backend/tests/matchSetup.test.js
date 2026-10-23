@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict'
+﻿﻿import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -7,7 +7,7 @@ import { test } from 'node:test'
 const testDirectory = mkdtempSync(path.join(tmpdir(), 'pavilion-match-setup-'))
 const databasePath = path.join(testDirectory, 'matches.sqlite')
 process.env.DATABASE_PATH = databasePath
-const [{ default: app }, { database, createDatabase }] = await Promise.all([
+const [{ default: app }, { createDatabase }] = await Promise.all([
   import('../app.js'),
   import('../db/database.js'),
 ])
@@ -41,6 +41,7 @@ test('creates, validates, lists, and persists match setup and playing XIs', asyn
   })
 
   let match
+  let titled
   try {
     const home = await request('/teams', post({ name: 'Dynamic Home XI' }))
     const away = await request('/teams', post({ name: 'Dynamic Away XI' }))
@@ -113,6 +114,27 @@ test('creates, validates, lists, and persists match setup and playing XIs', asyn
       setup: { ...setup, oversPerInnings: 11 },
     }))
     assert.equal(invalidOvers.status, 400)
+    const longTitle = await request('/matches', post({
+      ...baseMatch,
+      title: 'x'.repeat(121),
+    }))
+    assert.equal(longTitle.status, 400)
+    const badTitle = await request('/matches', post({
+      ...baseMatch,
+      title: 42,
+    }))
+    assert.equal(badTitle.status, 400)
+
+    // A titled 5-over match, saved exactly as the UI sends it.
+    titled = await request('/matches', post({
+      ...baseMatch,
+      title: 'Sunday friendly',
+      setup: { ...setup, oversPerInnings: 5, tossDecision: 'bat' },
+    }))
+    assert.equal(titled.status, 201)
+    assert.equal(titled.body.title, 'Sunday friendly')
+    assert.equal(titled.body.setup.oversPerInnings, 5)
+    assert.equal(titled.body.setup.tossDecision, 'bat')
 
     const created = await request('/matches', post(baseMatch))
     assert.equal(created.status, 201)
@@ -129,18 +151,32 @@ test('creates, validates, lists, and persists match setup and playing XIs', asyn
     assert.deepEqual(fetched.body.setup, match.setup)
 
     const updatedSetup = { ...setup, oversPerInnings: 5, tossDecision: 'bat' }
-    const updated = await request(`/matches/${match.id}`, patch({ ...baseMatch, setup: updatedSetup }))
+    const updated = await request(`/matches/${match.id}`, patch({
+      ...baseMatch,
+      title: 'Sunday friendly',
+      setup: updatedSetup,
+    }))
     assert.equal(updated.status, 200)
     assert.equal(updated.body.setup.oversPerInnings, 5)
     assert.equal(updated.body.setup.tossDecision, 'bat')
+    assert.equal(updated.body.title, 'Sunday friendly')
 
     const publicTournaments = await request('/tournaments')
     assert.deepEqual(publicTournaments.body, [])
+
+    // The match list shows every saved match with its status â€” including the
+    // titled one â€” and no seeded/demo rows are present.
+    const listedAgain = await request('/matches')
+    assert.equal(listedAgain.body.length, 2)
+    const titledRow = listedAgain.body.find((row) => row.id === titled.body.id)
+    assert.equal(titledRow.title, 'Sunday friendly')
+    assert.equal(titledRow.status, 'upcoming')
+    assert.ok(!('scores' in titledRow))
+    assert.equal(titledRow.isDemo, false)
   } finally {
     await new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve())
     })
-    database.close()
   }
 
   const reopened = createDatabase(databasePath)
@@ -151,8 +187,16 @@ test('creates, validates, lists, and persists match setup and playing XIs', asyn
     assert.equal(reopened.prepare('SELECT COUNT(*) AS count FROM match_players WHERE match_id = ?')
       .get(match.id).count, 22)
     assert.equal(reopened.prepare('SELECT COUNT(*) AS count FROM matches WHERE id = ?').get(match.id).count, 1)
+
+    const titledRow = reopened.prepare('SELECT title FROM matches WHERE id = ?').get(titled.body.id)
+    assert.equal(titledRow.title, 'Sunday friendly')
+    assert.ok(titledRow)
   } finally {
     reopened.close()
+    // Close the shared connection and clean up after the last test in the
+    // file so nothing leaks into other suites.
+    const { database } = await import('../db/database.js')
+    database.close()
     rmSync(testDirectory, { recursive: true, force: true })
   }
 })

@@ -255,9 +255,9 @@ function allowedWicketTypes(extraType: DeliveryEvent['extraType']) {
   return WICKET_TYPES
 }
 
-export function ScoreScreen() {
+export function ScoreScreen({ initialMatchId }: { initialMatchId?: string } = {}) {
   const [matches, setMatches] = useState<Match[]>([])
-  const [matchId, setMatchId] = useState('')
+  const [matchId, setMatchId] = useState(initialMatchId ?? '')
   const [session, setSession] = useState<ScoringSession | null>(null)
   const [loadingMatches, setLoadingMatches] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -286,6 +286,16 @@ export function ScoreScreen() {
     })
     return () => { active = false }
   }, [])
+
+  // When opened with a specific match (e.g. "Continue Scoring" from the
+  // matches list), load its scoring session once matches are available.
+  useEffect(() => {
+    if (!initialMatchId || !matches.length || matchId === initialMatchId) return
+    if (matches.some((match) => match.id === initialMatchId)) {
+      void selectMatch(initialMatchId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMatchId, matches])
 
   const selectedMatch = matches.find((match) => match.id === matchId)
   const state = session?.matchState ?? null

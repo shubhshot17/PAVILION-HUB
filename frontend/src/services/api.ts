@@ -226,6 +226,7 @@ export const scoringApi = {
 }
 
 export interface MatchInput {
+  title?: string
   tournamentId?: string
   format: Match['format']
   venue: string
