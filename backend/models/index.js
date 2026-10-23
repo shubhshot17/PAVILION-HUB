@@ -847,7 +847,7 @@ function getScoringSession(matchId) {
   if (!match) return null
   return parseScoringSession(database.prepare(`
     SELECT match_id, version, state_json FROM scoring_sessions WHERE match_id = ?
-  `).get(matchId)) ?? { matchId, version: 0, matchState: null, deliveries: [], bowlerSelections: [], eventIds: [] }
+  `).get(matchId)) ?? { matchId, version: 0, matchState: null, deliveries: [], bowlerSelections: [], batterActions: [], eventIds: [] }
 }
 
 function scoringTeams(match) {
@@ -923,6 +923,16 @@ function validateScoringState(match, state) {
       || new Set(innings.outIds).size !== innings.outIds.length) {
       throw new HttpError(400, 'Scoring state includes players outside the saved playing XIs')
     }
+    // The delivery ledger and over buckets must agree with each other and with
+    // the legal-ball count, so a buggy or tampering client cannot persist a
+    // state that cannot be replayed deterministically.
+    if (innings.deliveries.length !== innings.overs.reduce((sum, over) => sum + over.length, 0)
+      || innings.deliveries.length < innings.legalBalls
+      || innings.overs.length < 1
+      || innings.overs.slice(0, -1).some((over) => over.length < 6)
+      || (innings.overs.length - 1) > Math.floor(innings.legalBalls / 6)) {
+      throw new HttpError(400, 'Scoring state deliveries, over buckets, and legal-ball count are inconsistent')
+    }
   }
   return expectedTeams
 }
@@ -951,7 +961,8 @@ function assertScoringVersion(body, currentVersion) {
 function assertSameHistory(next, current) {
   if (next.deliveries.length !== current.deliveries.length
     || JSON.stringify(next.deliveries) !== JSON.stringify(current.deliveries)
-    || JSON.stringify(next.bowlerSelections) !== JSON.stringify(current.bowlerSelections)) {
+    || JSON.stringify(next.bowlerSelections) !== JSON.stringify(current.bowlerSelections)
+    || JSON.stringify(next.batterActions ?? []) !== JSON.stringify(current.batterActions ?? [])) {
     throw new HttpError(400, 'A bowler change cannot alter the saved delivery history')
   }
 }
@@ -1286,6 +1297,7 @@ function recordManagedDelivery(matchId, body) {
     matchState: body.matchState,
     deliveries: next.deliveries,
     bowlerSelections: next.bowlerSelections,
+    batterActions: next.batterActions ?? current.batterActions ?? [],
     eventIds: [...current.eventIds],
   }
   const eventId = id()
@@ -1372,6 +1384,7 @@ function chooseScoringBowler(matchId, body) {
     matchState: next.matchState,
     deliveries: next.deliveries,
     bowlerSelections: next.bowlerSelections,
+    batterActions: next.batterActions ?? current.batterActions ?? [],
     eventIds: current.eventIds,
   }
   const version = current.version + 1
@@ -1389,11 +1402,159 @@ function chooseScoringBowler(matchId, body) {
   return getScoringSession(matchId)
 }
 
-function undoScoringDelivery(matchId, body) {
+/**
+ * Records a scorer crease correction (swap ends / replace batter) without a
+ * delivery. The state is validated like any other scoring action, appended to
+ * the auditable batterActions list, and persisted with before/after snapshots
+ * so undo can restore the previous crease exactly.
+ */
+function recordBatterAction(matchId, body) {
   const match = getMatch(matchId)
   if (!match) return null
   const current = getScoringSession(matchId)
   assertScoringVersion(body, current.version)
+  if (!current.matchState || match.status === 'completed' || match.status === 'abandoned') {
+    throw new HttpError(409, 'Scoring has not started or this match has finished')
+  }
+  const action = body?.action
+  if (!action || typeof action !== 'object'
+    || !['swap', 'replace'].includes(action.kind)) {
+    throw new HttpError(400, "action.kind must be 'swap' or 'replace'")
+  }
+  if (action.afterDeliveryCount !== current.deliveries.length) {
+    throw new HttpError(409, 'The match state changed; reload before correcting the crease')
+  }
+  const innings = current.matchState.innings[current.matchState.currentInningsIndex]
+
+  // Compute the expected state with the pure engine semantics.
+  const nextMatchState = structuredClone(current.matchState)
+  const nextInnings = nextMatchState.innings[nextMatchState.currentInningsIndex]
+  let expectedInnings
+  if (action.kind === 'swap') {
+    if (action.outgoingPlayerId || action.incomingPlayerId || action.reason) {
+      throw new HttpError(400, 'A swap action must not include player ids or a reason')
+    }
+    if (!innings.strikerId || !innings.nonStrikerId || innings.strikerId === innings.nonStrikerId) {
+      throw new HttpError(400, 'Two distinct batters must be at the crease to swap ends')
+    }
+    expectedInnings = { ...innings, strikerId: innings.nonStrikerId, nonStrikerId: innings.strikerId }
+  } else {
+    const outgoing = action.outgoingPlayerId
+    const incoming = action.incomingPlayerId
+    if (typeof outgoing !== 'string' || typeof incoming !== 'string'
+      || !['retired-hurt', 'retired-out', 'substitution', 'correction'].includes(action.reason)) {
+      throw new HttpError(400, 'A replace action requires outgoingPlayerId, incomingPlayerId, and a valid reason')
+    }
+    if (![innings.strikerId, innings.nonStrikerId].includes(outgoing)) {
+      throw new HttpError(400, 'The outgoing batter must be at the crease')
+    }
+    if (outgoing === incoming) {
+      throw new HttpError(400, 'The incoming batter must be a different player')
+    }
+    const battingXI = scoringTeams(match).find((team) => team.id === innings.battingTeamId).players
+    if (!battingXI.some((player) => player.id === incoming)) {
+      throw new HttpError(400, 'The incoming batter must be in the saved playing XI')
+    }
+    if (incoming === innings.strikerId || incoming === innings.nonStrikerId) {
+      throw new HttpError(400, 'The incoming batter is already at the crease')
+    }
+    if (innings.outIds.includes(incoming)) {
+      throw new HttpError(400, 'The incoming batter has already been dismissed or retired out')
+    }
+    const outIds = action.reason === 'retired-hurt'
+      ? innings.outIds
+      : innings.outIds.includes(outgoing) ? innings.outIds : [...innings.outIds, outgoing]
+    expectedInnings = {
+      ...innings,
+      outIds,
+      ...(outgoing === innings.strikerId
+        ? { strikerId: incoming, nonStrikerId: innings.nonStrikerId }
+        : { nonStrikerId: incoming, strikerId: innings.strikerId }),
+    }
+  }
+  // A crease correction must not change the score, wickets, balls, bowler, or
+  // any figures — only who is on strike / at the crease.
+  const before = JSON.parse(JSON.stringify({
+    matchState: current.matchState,
+    deliveries: current.deliveries,
+    bowlerSelections: current.bowlerSelections,
+    batterActions: current.batterActions ?? [],
+    eventIds: current.eventIds,
+  }))
+  nextInnings.strikerId = expectedInnings.strikerId
+  nextInnings.nonStrikerId = expectedInnings.nonStrikerId
+  nextInnings.outIds = expectedInnings.outIds
+  const actionId = id()
+  const actionRecord = { actionId, ...action, afterDeliveryCount: current.deliveries.length }
+  const after = {
+    matchState: nextMatchState,
+    deliveries: current.deliveries,
+    bowlerSelections: current.bowlerSelections,
+    batterActions: [...(current.batterActions ?? []), actionRecord],
+    eventIds: current.eventIds,
+  }
+  const version = current.version + 1
+  database.transaction(() => {
+    database.prepare(`
+      INSERT INTO scoring_batter_actions (action_id, match_id, action_json, state_before_json, state_after_json)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(actionId, matchId, JSON.stringify(actionRecord), JSON.stringify(before), JSON.stringify(after))
+    const result = database.prepare(`
+      UPDATE scoring_sessions SET version = ?, state_json = ?,
+        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE match_id = ? AND version = ?
+    `).run(version, JSON.stringify(after), matchId, current.version)
+    if (result.changes !== 1) {
+      throw new HttpError(409, 'Scoring state changed; reload the match before correcting the crease')
+    }
+    syncMatchScoringState(matchId, after)
+  })()
+  return getScoringSession(matchId)
+}
+
+function undoScoringDelivery(matchId, body) {
+  const match = getMatch(matchId)
+  if (!match) return null
+  // Undoing after the match finishes would restore a pre-result state and
+  // flip the persisted match status back to 'live', corrupting the result.
+  if (match.status === 'completed' || match.status === 'abandoned') {
+    throw new HttpError(409, 'The match has finished and its score can no longer be undone')
+  }
+  const current = getScoringSession(matchId)
+  assertScoringVersion(body, current.version)
+  const lastBatterAction = (current.batterActions ?? []).at(-1)
+  if (lastBatterAction
+    && lastBatterAction.afterDeliveryCount === current.deliveries.length
+    && current.eventIds.length === 0) {
+    // Undo the most recent swap / replace crease correction by restoring its
+    // stored before-state. Only safe while no delivery has followed it.
+    const row = database.prepare(`
+      SELECT state_before_json FROM scoring_batter_actions
+      WHERE match_id = ? AND action_id = ?
+    `).get(matchId, lastBatterAction.actionId)
+    if (row) {
+      const previous = JSON.parse(row.state_before_json)
+      const previousState = {
+        matchState: previous.matchState,
+        deliveries: previous.deliveries,
+        bowlerSelections: previous.bowlerSelections,
+        batterActions: previous.batterActions ?? [],
+        eventIds: previous.eventIds,
+      }
+      database.transaction(() => {
+        const result = database.prepare(`
+          UPDATE scoring_sessions SET version = ?, state_json = ?,
+            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+          WHERE match_id = ? AND version = ?
+        `).run(current.version + 1, JSON.stringify(previousState), matchId, current.version)
+        if (result.changes !== 1) {
+          throw new HttpError(409, 'Scoring state changed; reload the match before undoing')
+        }
+        syncMatchScoringState(matchId, previousState)
+      })()
+      return getScoringSession(matchId)
+    }
+  }
   const eventId = current.eventIds.at(-1)
   if (!eventId) {
     throw new HttpError(409, 'There is no delivery to undo')
@@ -1442,6 +1603,7 @@ export const scoringSessions = {
   start: beginScoring,
   recordDelivery: recordManagedDelivery,
   chooseBowler: chooseScoringBowler,
+  recordBatterAction,
   undo: undoScoringDelivery,
 }
 

@@ -75,6 +75,22 @@ export interface InningsState {
   completed: boolean
 }
 
+/**
+ * A scorer correction to the crease that is not a delivery: swapping ends or
+ * replacing a batter (retired hurt / retired out / substitution where the
+ * competition allows it). Recorded with the delivery count it happened at so
+ * replay and undo stay deterministic.
+ */
+export interface BatterAction {
+  /** 'swap' exchanges ends; 'replace' substitutes a batter. */
+  kind: 'swap' | 'replace'
+  afterDeliveryCount: number
+  /** For 'replace': the batter coming off and the reason for the change. */
+  outgoingPlayerId?: string
+  incomingPlayerId?: string
+  reason?: 'retired-hurt' | 'retired-out' | 'substitution' | 'correction'
+}
+
 export interface MatchState {
   teamA: { id: string; name: string; players: { id: string; name: string }[] }
   teamB: { id: string; name: string; players: { id: string; name: string }[] }
@@ -442,6 +458,74 @@ function completeOver(inn: InningsState) {
 }
 
 /**
+ * Swap ends: exchange striker and non-striker without touching the score,
+ * figures, balls, or bowler. Allowed any time the innings is live.
+ */
+export function swapBatters(state: MatchState): MatchState {
+  const next: MatchState = structuredCloneNext(state)
+  const inn = next.innings[next.currentInningsIndex]
+  if (next.result || inn.completed) {
+    throw new Error('Cannot swap batters after the innings or match has ended.')
+  }
+  if (!inn.strikerId || !inn.nonStrikerId || inn.strikerId === inn.nonStrikerId) {
+    throw new Error('Two distinct batters must be at the crease to swap ends.')
+  }
+  const t = inn.strikerId
+  inn.strikerId = inn.nonStrikerId
+  inn.nonStrikerId = t
+  return next
+}
+
+/**
+ * Replace a batter at the crease without treating it as a dismissal: no run,
+ * ball, or wicket is added, and the outgoing player keeps their figures.
+ * Permitted reasons:
+ *  - 'retired-hurt'  → may return later, so the outgoing player is NOT marked out
+ *  - 'retired-out'   → counts as a wicket-like retirement, outgoing is marked out
+ *  - 'substitution' / 'correction' → scorer-level change, outgoing is marked out
+ * The incoming player must be an eligible member of the batting order who is
+ * not out (for retired-out/substitution) and not already at the crease.
+ */
+export function replaceBatter(
+  state: MatchState,
+  outgoingPlayerId: string,
+  incomingPlayerId: string,
+  reason: NonNullable<BatterAction['reason']>,
+): MatchState {
+  const next: MatchState = structuredCloneNext(state)
+  const inn = next.innings[next.currentInningsIndex]
+  if (next.result || inn.completed) {
+    throw new Error('Cannot replace a batter after the innings or match has ended.')
+  }
+  if (![inn.strikerId, inn.nonStrikerId].includes(outgoingPlayerId)) {
+    throw new Error('The outgoing batter must be at the crease.')
+  }
+  if (outgoingPlayerId === incomingPlayerId) {
+    throw new Error('The incoming batter must be a different player.')
+  }
+  if (!inn.battingOrder.includes(incomingPlayerId)) {
+    throw new Error('The incoming batter must be in the saved playing XI.')
+  }
+  if (incomingPlayerId === inn.strikerId || incomingPlayerId === inn.nonStrikerId) {
+    throw new Error('The incoming batter is already at the crease.')
+  }
+  if (inn.outIds.includes(incomingPlayerId)) {
+    throw new Error('The incoming batter has already been dismissed or retired out.')
+  }
+  // A retired-hurt player may return later; do not burn their wicket.
+  if (reason !== 'retired-hurt' && !inn.outIds.includes(outgoingPlayerId)) {
+    inn.outIds.push(outgoingPlayerId)
+  }
+  if (outgoingPlayerId === inn.strikerId) {
+    inn.strikerId = incomingPlayerId
+  } else {
+    inn.nonStrikerId = incomingPlayerId
+  }
+  ensureBatter(inn, incomingPlayerId)
+  return next
+}
+
+/**
  * Choose the bowler for the over about to start. Same bowler cannot bowl
  * consecutive overs. The UI stores the per-over bowler list on the innings
  * so undo/replay stays deterministic.
@@ -523,36 +607,46 @@ export function finishMatch(state: MatchState) {
 
 /* ---------------- undo ---------------- */
 
-/**
- * Rebuilds state by replaying all deliveries except the last one.
- * Because replay is deterministic, undo is always exact — even across
- * over completions, strike changes and innings transitions.
- */
 export interface BowlerSelection {
   afterDeliveryCount: number
   bowlerId: string
 }
 
+/**
+ * Rebuilds state by replaying all deliveries except the last one, along with
+ * any bowler selections and crease corrections (swap/replace) that occurred
+ * before the delivery being undone. Replay is deterministic, so undo is
+ * always exact.
+ */
 export function undoLastDelivery(
   setup: MatchSetup,
   delivered: DeliveryEvent[],
   bowlerSelections: BowlerSelection[] = [],
+  batterActions: BatterAction[] = [],
 ): MatchState {
   const replay = delivered.slice(0, -1)
   let state = buildInitialState(setup)
   let selectionIndex = 0
+  let actionIndex = 0
 
-  while (bowlerSelections[selectionIndex]?.afterDeliveryCount === 0) {
-    state = setBowler(state, bowlerSelections[selectionIndex].bowlerId)
-    selectionIndex += 1
-  }
-
-  for (const [index, delivery] of replay.entries()) {
-    state = applyDelivery(state, delivery)
-    while (bowlerSelections[selectionIndex]?.afterDeliveryCount === index + 1) {
+  const applyQueuedActions = (deliveryCount: number) => {
+    while (batterActions[actionIndex]?.afterDeliveryCount === deliveryCount) {
+      const action = batterActions[actionIndex]
+      state = action.kind === 'swap'
+        ? swapBatters(state)
+        : replaceBatter(state, action.outgoingPlayerId!, action.incomingPlayerId!, action.reason!)
+      actionIndex += 1
+    }
+    while (bowlerSelections[selectionIndex]?.afterDeliveryCount === deliveryCount) {
       state = setBowler(state, bowlerSelections[selectionIndex].bowlerId)
       selectionIndex += 1
     }
+  }
+
+  applyQueuedActions(0)
+  for (const [index, delivery] of replay.entries()) {
+    state = applyDelivery(state, delivery)
+    applyQueuedActions(index + 1)
   }
   return state
 }

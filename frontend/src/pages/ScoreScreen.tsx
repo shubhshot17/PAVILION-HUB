@@ -6,6 +6,7 @@ import {
   oversDisplay,
   runRate,
   setBowler,
+  type BatterAction,
   type DeliveryEvent,
   type InningsState,
   type MatchSetup as EngineMatchSetup,
@@ -176,7 +177,15 @@ function Scoreboard({ match, inn, state }: {
   )
 }
 
-function CreasePanel({ match, inn }: { match: MatchState; inn: InningsState }) {
+function CreasePanel({
+  match,
+  inn,
+  onOpenBatterDialog,
+}: {
+  match: MatchState
+  inn: InningsState
+  onOpenBatterDialog: () => void
+}) {
   const striker = inn.batterFigures[inn.strikerId]
   const nonStriker = inn.batterFigures[inn.nonStrikerId]
   const bowler = inn.bowlerFigures[inn.bowlerId]
@@ -199,6 +208,12 @@ function CreasePanel({ match, inn }: { match: MatchState; inn: InningsState }) {
           ? `${playerName(match, inn.bowlerId)} — ${oversDisplay(bowler.balls)}-${bowler.maidens}-${bowler.runs}-${bowler.wickets} (wd ${bowler.wides}, nb ${bowler.noBalls})`
           : 'Select bowler to begin the over'}</span>
       </div>
+      <button
+        className="score-btn score-btn--small"
+        onClick={onOpenBatterDialog}
+      >
+        Swap Batsman / Change Striker
+      </button>
     </section>
   )
 }
@@ -255,6 +270,136 @@ function allowedWicketTypes(extraType: DeliveryEvent['extraType']) {
   return WICKET_TYPES
 }
 
+const RETIRE_REASONS: { value: NonNullable<BatterAction['reason']>; label: string; hint: string }[] = [
+  { value: 'retired-hurt', label: 'Retired hurt', hint: 'May return later; keeps their wicket.' },
+  { value: 'retired-out', label: 'Retired out', hint: 'Counts as a retirement; cannot return.' },
+  { value: 'correction', label: 'Scorer correction', hint: 'Wrong batter was recorded at the crease.' },
+  { value: 'substitution', label: 'Substitution', hint: 'Use only if the competition allows substitutes.' },
+]
+
+function BattingSwapDialog({
+  state,
+  innings,
+  saving,
+  onSwap,
+  onReplace,
+  onClose,
+}: {
+  state: MatchState
+  innings: InningsState
+  saving: boolean
+  onSwap: () => void
+  onReplace: (outgoingId: string, incomingId: string, reason: NonNullable<BatterAction['reason']>) => void
+  onClose: () => void
+}) {
+  const [mode, setMode] = useState<'swap' | 'replace'>('swap')
+  const [outgoingId, setOutgoingId] = useState(innings.strikerId)
+  const [incomingId, setIncomingId] = useState('')
+  const [reason, setReason] = useState<NonNullable<BatterAction['reason']>>('retired-hurt')
+  const [confirming, setConfirming] = useState(false)
+  const crease = [innings.strikerId, innings.nonStrikerId].filter(Boolean)
+
+  // Eligible incoming players: in the batting order, not out, not at the crease.
+  const eligible = innings.battingOrder.filter((playerId) =>
+    !innings.outIds.includes(playerId) && !crease.includes(playerId))
+
+  return (
+    <div className="score-modal__backdrop" onClick={() => { if (!confirming) onClose() }}>
+      <div className="score-modal" onClick={(event) => event.stopPropagation()}>
+        <h3>Change batters</h3>
+        <div className="score-modal__tabs" role="tablist">
+          <button role="tab" aria-selected={mode === 'swap'} className={mode === 'swap' ? 'score-modal__tab--active' : ''}
+            onClick={() => { setMode('swap'); setConfirming(false) }} disabled={saving}>
+            Swap ends
+          </button>
+          <button role="tab" aria-selected={mode === 'replace'} className={mode === 'replace' ? 'score-modal__tab--active' : ''}
+            onClick={() => { setMode('replace'); setConfirming(false) }} disabled={saving}>
+            Replace batter
+          </button>
+        </div>
+        {mode === 'swap' ? (
+          <>
+            <p>
+              Exchange the striker and non-striker positions. The score, balls,
+              wickets, batting figures, and bowler are not affected.
+            </p>
+            <p>
+              Currently on strike: <strong>{playerName(state, innings.strikerId)}</strong> ·
+              Non-striker: <strong>{playerName(state, innings.nonStrikerId)}</strong>
+            </p>
+            <div className="score-modal__actions">
+              <button className="score-btn score-btn--primary" onClick={onSwap} disabled={saving}>
+                {saving ? 'Saving…' : 'Swap ends'}
+              </button>
+              <button className="score-btn" onClick={onClose} disabled={saving}>Cancel</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p>
+              Substitute a batter at the crease. This is not a dismissal — no
+              run, ball, or wicket is added, and the outgoing player keeps
+              their recorded statistics.
+            </p>
+            <label>
+              Batter coming off
+              <select value={outgoingId} onChange={(event) => setOutgoingId(event.target.value)} disabled={saving}>
+                {crease.map((playerId) => (
+                  <option key={playerId} value={playerId}>{playerName(state, playerId)}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Incoming batter
+              <select value={incomingId} onChange={(event) => setIncomingId(event.target.value)} disabled={saving}>
+                <option value="">Select a player…</option>
+                {eligible.map((playerId) => (
+                  <option key={playerId} value={playerId}>{playerName(state, playerId)}</option>
+                ))}
+              </select>
+            </label>
+            {eligible.length === 0 && (
+              <p className="score-message">No eligible replacement — every other player in the XI has batted.</p>
+            )}
+            <label>
+              Reason
+              <select value={reason} onChange={(event) =>
+                setReason(event.target.value as NonNullable<BatterAction['reason']>)} disabled={saving}>
+                {RETIRE_REASONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label} — {option.hint}</option>
+                ))}
+              </select>
+            </label>
+            {confirming ? (
+              <p className="score-message">
+                Replace <strong>{playerName(state, outgoingId)}</strong> with{' '}
+                <strong>{playerName(state, incomingId)}</strong>{' '}
+                ({RETIRE_REASONS.find((option) => option.value === reason)?.label})?
+              </p>
+            ) : null}
+            <div className="score-modal__actions">
+              {!confirming ? (
+                <button className="score-btn score-btn--primary"
+                  onClick={() => setConfirming(true)}
+                  disabled={saving || !incomingId}>
+                  Review replacement
+                </button>
+              ) : (
+                <button className="score-btn score-btn--danger"
+                  onClick={() => onReplace(outgoingId, incomingId, reason)}
+                  disabled={saving}>
+                  {saving ? 'Saving…' : 'Confirm replacement'}
+                </button>
+              )}
+              <button className="score-btn" onClick={onClose} disabled={saving}>Cancel</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function ScoreScreen({ initialMatchId }: { initialMatchId?: string } = {}) {
   const [matches, setMatches] = useState<Match[]>([])
   const [matchId, setMatchId] = useState(initialMatchId ?? '')
@@ -271,6 +416,7 @@ export function ScoreScreen({ initialMatchId }: { initialMatchId?: string } = {}
   const [battersCrossed, setBattersCrossed] = useState(false)
   const [wicketRuns, setWicketRuns] = useState(0)
   const [newBowler, setNewBowler] = useState('')
+  const [batterDialog, setBatterDialog] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -394,8 +540,22 @@ export function ScoreScreen({ initialMatchId }: { initialMatchId?: string } = {}
     }
   }
 
+  const applyBatterAction = async (action: BatterAction) => {
+    if (!selectedMatch || !session || saving) return
+    setError('')
+    setSaving(true)
+    try {
+      setSession(await scoringApi.recordBatterAction(selectedMatch.id, session.version, action))
+      setBatterDialog(false)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not apply the batter change.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const undo = async () => {
-    if (!selectedMatch || !session || !session.deliveries.length || saving) return
+    if (!selectedMatch || !session || saving) return
     setError('')
     setSaving(true)
     try {
@@ -515,7 +675,7 @@ export function ScoreScreen({ initialMatchId }: { initialMatchId?: string } = {}
 
       {error && <p className="score-message score-message--error" role="alert">{error}</p>}
       <Scoreboard match={selectedMatch} inn={innings} state={state} />
-      <CreasePanel match={state} inn={innings} />
+      <CreasePanel match={state} inn={innings} onOpenBatterDialog={() => setBatterDialog(true)} />
 
       <section className="score-controls">
         <h3>Score this delivery</h3>
@@ -634,9 +794,32 @@ export function ScoreScreen({ initialMatchId }: { initialMatchId?: string } = {}
         </section>
       ) : null}
 
+      {batterDialog && (
+        <BattingSwapDialog
+          state={state}
+          innings={innings}
+          saving={saving}
+          onSwap={() => {
+            void applyBatterAction({
+              kind: 'swap',
+              afterDeliveryCount: session?.deliveries.length ?? 0,
+            })
+          }}
+          onReplace={(outgoingId, incomingId, reason) => {
+            void applyBatterAction({
+              kind: 'replace',
+              afterDeliveryCount: session?.deliveries.length ?? 0,
+              outgoingPlayerId: outgoingId,
+              incomingPlayerId: incomingId,
+              reason,
+            })
+          }}
+          onClose={() => setBatterDialog(false)}
+        />
+      )}
+
       {wicketModal && (
-        <div className="score-modal__backdrop" onClick={() => setWicketModal(false)}>
-          <div className="score-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="score-modal__backdrop" onClick={() => setWicketModal(false)}>          <div className="score-modal" onClick={(event) => event.stopPropagation()}>
             <h3>Record dismissal</h3>
             <label>Dismissal type
               <select value={wicketType} onChange={(event) => {

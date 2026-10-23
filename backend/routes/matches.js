@@ -41,6 +41,14 @@ router.post('/:id/scoring/bowler', (req, res) => {
   res.status(200).json(session)
 })
 
+// Scorer crease corrections without a delivery: swap ends / replace batter.
+router.post('/:id/scoring/batters', (req, res) => {
+  requireScoringBody(req.body)
+  const session = scoringSessions.recordBatterAction(req.params.id, req.body)
+  if (!session) throw new HttpError(404, 'Match not found')
+  res.status(200).json(session)
+})
+
 router.post('/:id/scoring/undo', (req, res) => {
   requireScoringBody(req.body)
   const session = scoringSessions.undo(req.params.id, req.body)

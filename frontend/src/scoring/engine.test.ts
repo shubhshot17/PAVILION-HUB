@@ -10,8 +10,10 @@ import {
   createMatch,
   createInnings,
   oversDisplay,
+  replaceBatter,
   runRate,
   setBowler,
+  swapBatters,
   undoLastDelivery,
   type DeliveryEvent,
   type MatchSetup,
@@ -153,6 +155,43 @@ describe('strike rotation', () => {
     let s = buildInitialState(setup())
     s = applyDelivery(s, { runsOffBat: 0, extraType: 'bye', extraRuns: 1 })
     expect(s.innings[0].strikerId).toBe('A2')
+  })
+
+  it('rotates strike on 3 and 5 runs, including off a no-ball', () => {
+    let s = buildInitialState(setup())
+    s = applyDelivery(s, bat(3))
+    expect(s.innings[0].strikerId).toBe('A2')
+    s = applyDelivery(s, bat(2))
+    expect(s.innings[0].strikerId).toBe('A2')
+    s = applyDelivery(s, { runsOffBat: 0, extraType: 'noball', extraRuns: 5 })
+    // 5 additional run on a no-ball is odd → batters cross
+    expect(s.innings[0].strikerId).toBe('A1')
+  })
+
+  it('records 0, 2, 4, and 6-run deliveries with correct figure accumulation', () => {
+    let s = buildInitialState(setup())
+    // All even runs: the strike never rotates, so A1 accumulates everything.
+    for (const runs of [0, 2, 4, 6]) s = applyDelivery(s, bat(runs))
+    const inn = s.innings[0]
+    expect(inn.runs).toBe(12)
+    expect(inn.legalBalls).toBe(4)
+    expect(inn.batterFigures.A1).toMatchObject({ runs: 12, balls: 4, fours: 1, sixes: 1 })
+    expect(inn.batterFigures.A2).toMatchObject({ runs: 0, balls: 0 })
+  })
+
+  it('a new batter coming in at the end of an over does not disturb the strike swap', () => {
+    let s = buildInitialState(setup())
+    // 5 dot balls, then the striker is run out on the last ball with batters crossed
+    for (let i = 0; i < 5; i++) s = applyDelivery(s, bat(0))
+    s = applyDelivery(s, {
+      runsOffBat: 0,
+      wicket: { type: 'runout', dismissedPlayerId: 'A1', battersCrossed: true },
+    })
+    const inn = s.innings[0]
+    expect(inn.wickets).toBe(1)
+    expect(inn.legalBalls).toBe(6)
+    // over ends → swap; A3 has come in for A1
+    expect([inn.strikerId, inn.nonStrikerId].sort()).toEqual(['A2', 'A3'])
   })
 
   it('dismissed striker is replaced and new batter takes strike', () => {
@@ -396,6 +435,103 @@ describe('bowler selection', () => {
   })
 })
 
+describe('crease corrections: swap and replace', () => {
+  it('swapping ends exchanges batters without changing any figures', () => {
+    let s = buildInitialState(setup())
+    s = applyDelivery(s, bat(4))
+    const before = JSON.parse(JSON.stringify(s))
+    const swapped = swapBatters(s)
+    const inn = swapped.innings[0]
+    expect(inn.strikerId).toBe('A2')
+    expect(inn.nonStrikerId).toBe('A1')
+    // score, balls, wickets, extras, figures, and bowler are untouched
+    expect(inn.runs).toBe(before.innings[0].runs)
+    expect(inn.wickets).toBe(before.innings[0].wickets)
+    expect(inn.legalBalls).toBe(before.innings[0].legalBalls)
+    expect(inn.extras).toEqual(before.innings[0].extras)
+    expect(inn.batterFigures).toEqual(before.innings[0].batterFigures)
+    expect(inn.bowlerFigures).toEqual(before.innings[0].bowlerFigures)
+    expect(inn.bowlerId).toBe(before.innings[0].bowlerId)
+    expect(inn.overs).toEqual(before.innings[0].overs)
+  })
+
+  it('refuses to swap after the innings ends or with one batter', () => {
+    let s = buildInitialState(setup())
+    for (let i = 0; i < 6; i++) s = applyDelivery(s, bat(0))
+    expect(() => swapBatters(s)).not.toThrow()
+    const done = buildInitialState(setup({ totalOvers: 1 }))
+    let finished = done
+    for (let i = 0; i < 6; i++) finished = applyDelivery(finished, bat(0))
+    // first innings completed → second innings shell exists, still swappable
+    expect(() => swapBatters(finished)).not.toThrow()
+    const broken = JSON.parse(JSON.stringify(finished))
+    broken.innings[broken.currentInningsIndex].nonStrikerId = ''
+    expect(() => swapBatters(broken)).toThrow(/Two distinct batters/)
+  })
+
+  it('replaces the striker with an eligible batter without adding stats', () => {
+    let s = buildInitialState(setup())
+    s = applyDelivery(s, bat(4))
+    s = applyDelivery(s, bat(1)) // A2 on strike
+    const before = JSON.parse(JSON.stringify(s))
+    const replaced = replaceBatter(s, 'A2', 'A3', 'retired-hurt')
+    const inn = replaced.innings[0]
+    expect(inn.strikerId).toBe('A3')
+    expect(inn.nonStrikerId).toBe('A1')
+    // retired hurt: outgoing is NOT marked out and keeps their figures
+    expect(inn.outIds).not.toContain('A2')
+    expect(inn.batterFigures.A2).toEqual(before.innings[0].batterFigures.A2)
+    expect(inn.runs).toBe(before.innings[0].runs)
+    expect(inn.legalBalls).toBe(before.innings[0].legalBalls)
+    expect(inn.wickets).toBe(before.innings[0].wickets)
+  })
+
+  it('marks the outgoing batter out for non-retired-hut reasons', () => {
+    let s = buildInitialState(setup())
+    const replaced = replaceBatter(s, 'A2', 'A3', 'substitution')
+    expect(replaced.innings[0].outIds).toContain('A2')
+    expect(replaced.innings[0].wickets).toBe(0) // not a dismissal
+  })
+
+  it('rejects ineligible replacements', () => {
+    let s = buildInitialState(setup())
+    expect(() => replaceBatter(s, 'A1', 'A2', 'substitution')).toThrow(/already at the crease/)
+    expect(() => replaceBatter(s, 'A1', 'B1', 'substitution')).toThrow(/playing XI/)
+    expect(() => replaceBatter(s, 'A3', 'A4', 'substitution')).toThrow(/at the crease/)
+    const dismissed = applyDelivery(s, {
+      runsOffBat: 0,
+      wicket: { type: 'bowled', dismissedPlayerId: 'A1' },
+    })
+    expect(() => replaceBatter(dismissed, 'A3', 'A1', 'substitution')).toThrow(/dismissed or retired out/)
+  })
+
+  it('undo replays batter actions deterministically', () => {
+    const st = setup()
+    const events: DeliveryEvent[] = [bat(4), bat(1)]
+    const batterActions = [
+      { kind: 'swap' as const, afterDeliveryCount: 1 },
+    ]
+    let s = buildInitialState(st)
+    for (const event of events) s = applyDelivery(s, event)
+    s = swapBatters(s)
+
+    // undo the last delivery but keep the swap (it happened at count 1):
+    // after bat(4) A1 is still striker (even runs); replaying the swap puts
+    // A2 on strike with 1 legal ball bowled and only 4 runs on the board.
+    const undone = undoLastDelivery(st, events, [], batterActions)
+    expect(undone.innings[0].strikerId).toBe('A2')
+    expect(undone.innings[0].nonStrikerId).toBe('A1')
+    expect(undone.innings[0].legalBalls).toBe(1)
+    expect(undone.innings[0].runs).toBe(4)
+    expect(undone.innings[0].wickets).toBe(0)
+
+    // undo past the swap too: no actions apply at count 0
+    const fullyUndone = undoLastDelivery(st, events.slice(0, 1), [],
+      batterActions.filter((a) => a.afterDeliveryCount < 1))
+    expect(fullyUndone.innings[0].legalBalls).toBe(0)
+  })
+})
+
 describe('helpers and second-innings shell', () => {
   it('formats overs like cricket scoreboards', () => {
     expect(oversDisplay(0)).toBe('0.0')
@@ -403,7 +539,6 @@ describe('helpers and second-innings shell', () => {
     expect(oversDisplay(7)).toBe('1.1')
     expect(oversDisplay(98)).toBe('16.2')
   })
-
   it('run rate is runs per over', () => {
     expect(runRate(24, 12)).toBe(12)
     expect(runRate(10, 0)).toBe(0)

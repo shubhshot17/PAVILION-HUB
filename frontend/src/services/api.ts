@@ -24,6 +24,7 @@ import type {
 } from '../types'
 import type {
   BowlerSelection,
+  BatterAction,
   DeliveryEvent,
   MatchState,
 } from '../scoring/engine'
@@ -183,6 +184,8 @@ export interface ScoringSession {
   matchState: MatchState | null
   deliveries: DeliveryEvent[]
   bowlerSelections: BowlerSelection[]
+  /** Scorer crease corrections (swap ends / replace batter), in order. */
+  batterActions: BatterAction[]
   eventIds: string[]
 }
 
@@ -220,6 +223,15 @@ export const scoringApi = {
     matchState,
     deliveries,
     bowlerSelections,
+  }),
+  /** Swap ends or replace a batter without recording a delivery. */
+  recordBatterAction: (
+    matchId: string,
+    expectedVersion: number,
+    action: BatterAction,
+  ) => post<ScoringSession>(`/matches/${matchId}/scoring/batters`, {
+    expectedVersion,
+    action,
   }),
   undo: (matchId: string, expectedVersion: number) =>
     post<ScoringSession>(`/matches/${matchId}/scoring/undo`, { expectedVersion }),
