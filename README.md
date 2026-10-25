@@ -37,7 +37,20 @@ python-ai-service/      FastAPI + scikit-learn prediction service
 - Python 3.12 (recommended) for the AI service
 - For Android builds: Android Studio Ladybug+, JDK 17, Android SDK 36
 
-## Quick start (PowerShell)
+## Quick start (one command)
+
+From the repository root:
+
+```bash
+npm run install:all   # installs root, backend and frontend dependencies
+cp backend/.env.example backend/.env
+npm run setup         # creates/updates the SQLite schema
+npm run dev           # starts the API (port 3000) and the Vite dev server together
+```
+
+`npm run dev:backend` / `npm run dev:frontend` start either one on its own.
+
+## Quick start per package (PowerShell)
 
 ### 1. Backend API (port 3000)
 
