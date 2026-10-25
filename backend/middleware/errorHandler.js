@@ -15,18 +15,15 @@ export function errorHandler(error, _req, res, next) {
     return next(error)
   }
 
-  const databaseError = typeof error.code === 'string' && error.code.startsWith('SQLITE_CONSTRAINT')
-  const status = Number.isInteger(error.status)
-    ? error.status
-    : databaseError && error.code.includes('UNIQUE') ? 409
-      : databaseError ? 400 : 500
+  const duplicateKey = error.code === 11000
+  const status = Number.isInteger(error.status) ? error.status : duplicateKey ? 409 : 500
   if (status >= 500) {
     console.error(error)
   }
 
   const message = status === 500
     ? 'Internal server error'
-    : databaseError ? 'The request conflicts with existing data or a database constraint' : error.message
+    : duplicateKey ? 'The request conflicts with existing data' : error.message
   const response = { error: { message } }
   if (error.details) {
     response.error.details = error.details

@@ -1,0 +1,104 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* PAVILION HUB — light "summer" theme: warm cream page, sunset-orange
+   primary, grass-green success, bright red for live. */
+:root {
+  --radius: 0.875rem;
+
+  --background: oklch(0.992 0.008 85);
+  --foreground: oklch(0.25 0.025 55);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.69 0.19 46);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.965 0.025 80);
+  --secondary-foreground: oklch(0.32 0.05 55);
+  --muted: oklch(0.968 0.012 80);
+  --muted-foreground: oklch(0.53 0.025 60);
+  --accent: oklch(0.955 0.045 75);
+  --accent-foreground: oklch(0.33 0.07 50);
+  --destructive: oklch(0.6 0.22 25);
+  --border: oklch(0.915 0.018 78);
+  --input: oklch(0.9 0.02 78);
+  --ring: oklch(0.69 0.19 46);
+
+  --success: oklch(0.6 0.15 150);
+  --success-soft: oklch(0.96 0.045 150);
+  --live: oklch(0.62 0.23 27);
+  --sky: oklch(0.68 0.14 230);
+
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.33 0.03 55);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.96 0.04 70);
+  --sidebar-accent-foreground: oklch(0.4 0.12 45);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+
+@theme inline {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: calc(var(--radius) - 2px);
+  --radius-xl: calc(var(--radius) + 2px);
+  --radius-2xl: calc(var(--radius) + 6px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-live: var(--live);
+  --color-sky: var(--sky);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Sunny gradient used behind hero and live-score cards. */
+.summer-gradient {
+  background:
+    radial-gradient(120% 140% at 100% 0%, oklch(0.88 0.13 88 / 0.85) 0%, transparent 55%),
+    linear-gradient(135deg, oklch(0.68 0.19 42) 0%, oklch(0.75 0.17 62) 100%);
+}

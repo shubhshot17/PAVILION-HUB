@@ -1,127 +1,57 @@
-import { useState } from "react";
-import { Sidebar } from "./components/Sidebar";
-import { TopBar } from "./components/TopBar";
-import { Dashboard } from "./pages/Dashboard";
-import { ScoreScreen } from "./pages/ScoreScreen";
-import { TournamentsPage } from "./pages/TournamentsPage";
-import { TeamsPage } from "./pages/TeamsPage";
-import { MatchesPage } from "./pages/MatchesPage";
-import "./App.css";
+import { BrowserRouter, Link, Route, Routes } from 'react-router'
+import { AppLayout } from '@/components/app-layout'
+import { EmptyState } from '@/components/common'
+import { PublicLayout } from '@/components/public-layout'
+import { Button } from '@/components/ui/button'
+import { Toaster } from '@/components/ui/sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { HomePage } from '@/pages/home'
+import { MatchPage } from '@/pages/match'
+import { MatchesPage } from '@/pages/matches'
+import { NewMatchPage } from '@/pages/new-match'
+import { PlayerPage } from '@/pages/player'
+import { PublicMatchPage, PublicPlayerPage, PublicTeamPage, PublicTournamentPage } from '@/pages/public/public-pages'
+import { ScorePage } from '@/pages/score'
+import { StartMatchPage } from '@/pages/start-match'
+import { StatsPage } from '@/pages/stats'
+import { TeamPage } from '@/pages/team'
+import { TeamsPage } from '@/pages/teams'
+import { TournamentPage } from '@/pages/tournament'
+import { TournamentsPage } from '@/pages/tournaments'
 
-function App() {
-  const [activePage, setActivePage] = useState("dashboard");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [matchAction, setMatchAction] = useState<{ id: string; edit: boolean } | null>(null);
-  const [createMatch, setCreateMatch] = useState(false);
-
-  const PAGE_TITLES: Record<string, string> = {
-    dashboard:   "Dashboard",
-    live:        "Live Scores",
-    matches:     "Matches",
-    tournaments: "Tournaments",
-    teams:       "Teams & Players",
-    stats:       "Statistics",
-    ai:          "AI Predictions",
-    score:       "Scoring",
-  };
-
-  const navigate = (pageId: string) => {
-    setActivePage(pageId);
-    setMenuOpen(false); // close the mobile drawer after choosing a page
-    setMatchAction(null);
-    setCreateMatch(false);
-  };
-
-  const openMatch = (id: string, edit: boolean) => {
-    setMatchAction({ id, edit });
-    setCreateMatch(false);
-    setActivePage("matches");
-    setMenuOpen(false);
-  };
-
-  /** Opens the ball-by-ball scoring screen for a specific match. */
-  const startScoring = (id: string) => {
-    setMatchAction({ id, edit: false });
-    setCreateMatch(false);
-    setActivePage("score");
-    setMenuOpen(false);
-  };
-
-  const startMatchCreation = () => {
-    setMatchAction(null);
-    setCreateMatch(true);
-    setActivePage("matches");
-    setMenuOpen(false);
-  };
-
-  function renderPage() {
-    switch (activePage) {
-      case "dashboard":
-        return (
-          <Dashboard
-            onNavigate={navigate}
-            onViewMatch={(id) => openMatch(id, false)}
-            onEditSetup={(id) => openMatch(id, true)}
-            onCreateMatch={startMatchCreation}
-          />
-        );
-      case "score":
-        return <ScoreScreen initialMatchId={matchAction?.id} />;
-      case "tournaments":
-        return <TournamentsPage />;
-      case "teams":
-        return <TeamsPage />;
-      case "matches":
-        return (
-          <MatchesPage
-            initialMatchId={matchAction?.id}
-            initialEditSetup={matchAction?.edit}
-            initialCreate={createMatch}
-            onInitialActionHandled={() => {
-              setMatchAction(null);
-              setCreateMatch(false);
-            }}
-            onManageTeams={() => navigate("teams")}
-            onStartScoring={(matchId) => startScoring(matchId)}
-          />
-        );
-      case "live":
-        return <MatchesPage initialFilter="live" onStartScoring={(matchId) => startScoring(matchId)} />;
-      default:
-        return (
-          <div className="app-shell__placeholder">
-            <h2>{PAGE_TITLES[activePage]}</h2>
-            <p>
-              This page is coming soon. The Dashboard already shows a full
-              preview of live matches, fixtures, results, and standings.
-            </p>
-            <button onClick={() => navigate("dashboard")}>
-              ← Back to Dashboard
-            </button>
-          </div>
-        );
-    }
-  }
-
-  return (
-    <>
-      <TopBar
-        title={PAGE_TITLES[activePage] ?? "Dashboard"}
-        onMenuClick={() => setMenuOpen(!menuOpen)}
-        menuOpen={menuOpen}
-      />
-      <Sidebar
-        activePage={activePage}
-        onNavigate={navigate}
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-      />
-
-      <main className="app-shell__content">
-        {renderPage()}
-      </main>
-    </>
-  );
+function NotFound() {
+  return <EmptyState title="Page not found" action={<Button asChild><Link to="/">Go home</Link></Button>} />
 }
 
-export default App;
+export default function App() {
+  return (
+    <TooltipProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="tournaments" element={<TournamentsPage />} />
+            <Route path="tournaments/:id" element={<TournamentPage />} />
+            <Route path="matches" element={<MatchesPage />} />
+            <Route path="matches/new" element={<NewMatchPage />} />
+            <Route path="matches/:id" element={<MatchPage />} />
+            <Route path="matches/:id/start" element={<StartMatchPage />} />
+            <Route path="matches/:id/score" element={<ScorePage />} />
+            <Route path="teams" element={<TeamsPage />} />
+            <Route path="teams/:id" element={<TeamPage />} />
+            <Route path="players/:id" element={<PlayerPage />} />
+            <Route path="stats" element={<StatsPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+          <Route path="t/:code" element={<PublicLayout />}>
+            <Route index element={<PublicTournamentPage />} />
+            <Route path="m/:matchId" element={<PublicMatchPage />} />
+            <Route path="team/:teamId" element={<PublicTeamPage />} />
+            <Route path="p/:playerId" element={<PublicPlayerPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+      <Toaster position="top-center" richColors />
+    </TooltipProvider>
+  )
+}

@@ -1,5 +1,4 @@
 import dotenv from 'dotenv'
-import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 dotenv.config({ path: fileURLToPath(new URL('.env', import.meta.url)) })
@@ -21,33 +20,17 @@ try {
   throw new Error('FRONTEND_ORIGIN must be a valid HTTP or HTTPS origin without a path')
 }
 
-const backendDirectory = fileURLToPath(new URL('.', import.meta.url))
-const databasePath = process.env.DATABASE_PATH === ':memory:'
-  ? ':memory:'
-  : path.resolve(backendDirectory, process.env.DATABASE_PATH || './data/pavilion.sqlite')
+const mongodbUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017'
+const mongodbDb = process.env.MONGODB_DB || 'pavilion_hub'
 
-const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://127.0.0.1:8000'
-let parsedAiServiceUrl
-try {
-  parsedAiServiceUrl = new URL(aiServiceUrl)
-  if (!['http:', 'https:'].includes(parsedAiServiceUrl.protocol)
-    || parsedAiServiceUrl.pathname !== '/' || parsedAiServiceUrl.search || parsedAiServiceUrl.hash) {
-    throw new Error()
-  }
-} catch {
-  throw new Error('AI_SERVICE_URL must be a valid HTTP or HTTPS origin')
-}
-
-const aiServiceTimeoutMs = Number(process.env.AI_SERVICE_TIMEOUT_MS || 3000)
-if (!Number.isInteger(aiServiceTimeoutMs) || aiServiceTimeoutMs < 100 || aiServiceTimeoutMs > 30000) {
-  throw new Error('AI_SERVICE_TIMEOUT_MS must be an integer between 100 and 30000')
-}
+// Built frontend (frontend/dist). When present, the API also serves the web app,
+// so production is a single service on one address.
+const frontendDist = fileURLToPath(new URL('../frontend/dist/', import.meta.url))
 
 export const config = {
   port,
   frontendOrigin,
-  databasePath,
-  backendDirectory,
-  aiServiceUrl: parsedAiServiceUrl.origin,
-  aiServiceTimeoutMs,
+  mongodbUri,
+  mongodbDb,
+  frontendDist,
 }

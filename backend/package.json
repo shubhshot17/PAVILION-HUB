@@ -4,20 +4,21 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "setup": "node db/migrate.js",
-    "db:migrate": "node db/migrate.js",
-    "db:seed:demo": "node db/seed.js",
+    "db:seed": "node db/seed.js",
     "test": "node --test"
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "better-sqlite3": "^12.2.0",
     "dotenv": "^16.4.7",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "mongodb": "^6.21.0"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^10.4.3"
   }
 }

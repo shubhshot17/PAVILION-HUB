@@ -1,81 +1,37 @@
 import { Router } from 'express'
-import { createResourceRouter } from './resourceRoutes.js'
-import controller from '../controllers/matchesController.js'
-import { partnerships, setMatchResult } from '../models/tournament.js'
-import { HttpError } from '../middleware/errorHandler.js'
-import { validateMatchResult, validatePartnership } from '../controllers/validators.js'
-import { scoringSessions } from '../models/index.js'
+import { db } from '../db/mongo.js'
+import { body } from '../lib/validate.js'
+import { summarize } from '../services/context.js'
+import {
+  abandonMatch, createMatch, deleteMatch, endInnings, matchDetail, recordBall,
+  setCrease, startMatch, startNextInnings, undoBall, updateMatch,
+} from '../services/matches.js'
 
-const router = createResourceRouter(controller)
+const router = Router()
 
-function requireScoringBody(body) {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    throw new HttpError(400, 'Request body must be a JSON object')
-  }
-}
-
-router.get('/:id/scoring', (req, res) => {
-  const session = scoringSessions.get(req.params.id)
-  if (!session) throw new HttpError(404, 'Match not found')
-  res.status(200).json(session)
+router.get('/', async (req, res) => {
+  const filter = {}
+  if (req.query.tournamentId) filter.tournamentId = String(req.query.tournamentId)
+  if (req.query.status) filter.status = String(req.query.status)
+  if (req.query.teamId) filter.$or = [{ teamAId: String(req.query.teamId) }, { teamBId: String(req.query.teamId) }]
+  const matches = await db().matches.find(filter).sort({ date: -1 }).limit(200).toArray()
+  res.json(await summarize(matches))
 })
 
-router.post('/:id/scoring/start', (req, res) => {
-  requireScoringBody(req.body)
-  const session = scoringSessions.start(req.params.id, req.body)
-  if (!session) throw new HttpError(404, 'Match not found')
-  res.status(201).json(session)
+router.post('/', async (req, res) => res.status(201).json(await createMatch(body(req))))
+router.get('/:id', async (req, res) => res.json(await matchDetail(req.params.id)))
+router.patch('/:id', async (req, res) => res.json(await updateMatch(req.params.id, body(req))))
+router.delete('/:id', async (req, res) => {
+  await deleteMatch(req.params.id)
+  res.status(204).end()
 })
 
-router.post('/:id/scoring/deliveries', (req, res) => {
-  requireScoringBody(req.body)
-  const session = scoringSessions.recordDelivery(req.params.id, req.body)
-  if (!session) throw new HttpError(404, 'Match not found')
-  res.status(201).json(session)
-})
-
-router.post('/:id/scoring/bowler', (req, res) => {
-  requireScoringBody(req.body)
-  const session = scoringSessions.chooseBowler(req.params.id, req.body)
-  if (!session) throw new HttpError(404, 'Match not found')
-  res.status(200).json(session)
-})
-
-// Scorer crease corrections without a delivery: swap ends / replace batter.
-router.post('/:id/scoring/batters', (req, res) => {
-  requireScoringBody(req.body)
-  const session = scoringSessions.recordBatterAction(req.params.id, req.body)
-  if (!session) throw new HttpError(404, 'Match not found')
-  res.status(200).json(session)
-})
-
-router.post('/:id/scoring/undo', (req, res) => {
-  requireScoringBody(req.body)
-  const session = scoringSessions.undo(req.params.id, req.body)
-  if (!session) throw new HttpError(404, 'Match not found')
-  res.status(200).json(session)
-})
-
-// ── Match result (set winner, POTM, tie/abandoned) ────────────
-router.patch('/:id/result', (req, res) => {
-  validateMatchResult(req.body)
-  const updated = setMatchResult(req.params.id, req.body)
-  if (!updated) throw new HttpError(404, 'Match not found')
-  res.status(200).json(updated)
-})
-
-// ── Partnerships ──────────────────────────────────────────────
-// inningsId passed as query: /api/matches/:id/partnerships?inningsId=xxx
-router.get('/:id/partnerships', (req, res) => {
-  if (!req.query.inningsId) throw new HttpError(400, 'inningsId query param is required')
-  res.status(200).json(partnerships.list(req.query.inningsId))
-})
-
-router.post('/:id/partnerships', (req, res) => {
-  if (!req.body.inningsId) throw new HttpError(400, 'inningsId is required')
-  validatePartnership(req.body)
-  const p = partnerships.upsert(req.body.inningsId, req.body)
-  res.status(201).json(p)
-})
+router.post('/:id/start', async (req, res) => res.json(await startMatch(req.params.id, body(req))))
+router.patch('/:id/crease', async (req, res) => res.json(await setCrease(req.params.id, body(req))))
+router.post('/:id/balls', async (req, res) => res.status(201).json(await recordBall(req.params.id, body(req))))
+router.delete('/:id/balls/last', async (req, res) => res.json(await undoBall(req.params.id)))
+router.post('/:id/next-innings', async (req, res) => res.json(await startNextInnings(req.params.id, body(req))))
+router.post('/:id/end-innings', async (req, res) => res.json(await endInnings(req.params.id)))
+router.post('/:id/abandon', async (req, res) => res.json(await abandonMatch(req.params.id)))
 
 export default router
