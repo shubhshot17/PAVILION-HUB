@@ -1,125 +1,85 @@
 # PAVILION HUB
 
-PAVILION HUB is a cricket tournament management and live ball-by-ball scoring
-platform. It consists of three parts:
+Simple cricket tournament scoring, in the spirit of CricHeroes: create a
+tournament, add teams and players, score matches ball by ball, and share one
+link with your WhatsApp group so everyone can follow live scores, the points
+table and player stats.
 
-| Part | Stack | Location |
-| ---- | ----- | -------- |
-| Web / Android frontend | React 19, TypeScript, Vite, Capacitor | `frontend/` |
-| REST API backend | Node.js, Express, SQLite (`better-sqlite3`) | `backend/` |
-| AI prediction service | Python, FastAPI, scikit-learn | `python-ai-service/` |
+| Part | Stack | Folder |
+| ---- | ----- | ------ |
+| Web app (+ optional Android shell) | React 19, TypeScript, Vite, Tailwind, shadcn/ui | `frontend/` |
+| API | Node.js 22, Express 5, MongoDB | `backend/` |
 
 ## Features
 
-- Teams, players, tournaments, fixtures, and matches management.
-- Append-only ball-by-ball event ledger with transactional batting/bowling
-  figures and reconstructed scorecards.
-- Points table per tournament.
-- Experimental AI predictions (win probability, first-innings score) served by
-  a separate Python service and proxied server-side through the Node API.
-  **These models are trained on synthetic data only — see
-  [`python-ai-service/README.md`](python-ai-service/README.md).**
-- Capacitor wrapper for building a native Android app from the same web build
-  (see [`frontend/ANDROID.md`](frontend/ANDROID.md)).
+- **Tournaments** with teams, fixtures, a points table (2 pts per win, net run rate) and leaderboards.
+- **Teams & players** with roles and batting/bowling styles.
+- **Ball-by-ball scoring**: runs, wides, no-balls, byes, leg-byes, every kind of dismissal, undo, swap strike,
+  and prompts for the next batter, the next bowler and the innings break.
+- **Scorecards** with batting, bowling, extras, fall of wickets and over-by-over history.
+- **Player profiles** with career batting and bowling stats.
+- **Share link** (`/t/<code>`): a read-only public page with live scores, table, stats and squads.
 
-## Repository layout
+Scorecards, results, tables and stats are all calculated from the stored balls
+(`backend/lib/scoring.js`), so undo is always safe.
 
-```
-frontend/               React + Vite web app and Capacitor Android shell
-  android/              Native Android project (Gradle)
-backend/                Express API, SQLite migrations, seed, tests
-python-ai-service/      FastAPI + scikit-learn prediction service
-```
+## Run locally
 
-## Prerequisites
+Requires Node.js 22+ and a MongoDB database (MongoDB Atlas free tier works).
 
-- Node.js 20+
-- Python 3.12 (recommended) for the AI service
-- For Android builds: Android Studio Ladybug+, JDK 17, Android SDK 36
-
-## Quick start (PowerShell)
-
-### 1. Backend API (port 3000)
-
-```powershell
-cd backend
-npm install
-Copy-Item .env.example .env
-npm run setup     # creates/updates the SQLite schema (no demo data)
-npm run dev
+```bash
+npm run install:all
+cp backend/.env.example backend/.env   # then set MONGODB_URI
+npm run seed                           # optional: mock tournament, 4 teams, matches
+npm run dev                            # API on :3000, web app on :5173
 ```
 
-The SQLite database is created at `backend/data/pavilion.sqlite`. `npm test`
-runs API integration, persistence, and AI-proxy tests.
+Open http://localhost:5173.
 
-Migrations never insert teams, players, or matches, so the app starts empty
-and every record in it is created by the user. Fictional demo records exist
-only behind the explicit `npm run db:seed:demo` command (marked `is_demo` and
-hidden from the normal interface); `npm run db:seed:demo -- --clear` removes
-them again.
+`npm run seed -- --clear` removes the mock data again (teams your own matches
+use are kept). `npm test` runs the backend and frontend tests.
 
-### 2. Frontend (Vite dev server)
+### Environment (`backend/.env`)
 
-```powershell
-cd frontend
-npm install
-Copy-Item .env.example .env.local   # set VITE_API_URL if needed
-npm run dev
+| Variable | Purpose |
+| -------- | ------- |
+| `MONGODB_URI` | MongoDB connection string |
+| `MONGODB_DB` | Database name (default `pavilion_hub`); use one just for this app |
+| `PORT` | API port (default 3000; hosts usually set this for you) |
+| `FRONTEND_ORIGIN` | Allowed origin for the Vite dev server (default `http://localhost:5173`) |
+
+## Deploy (one service)
+
+In production the API also serves the built web app, so you deploy a single
+Node service and share links work on the same address.
+
+- **Build command:** `npm run build`
+- **Start command:** `npm start`
+- **Environment:** `MONGODB_URI`, `MONGODB_DB`
+
+This works on Render, Railway, Fly.io or any VPS. On MongoDB Atlas, allow the
+host's IP under *Network Access*.
+
+> There is no login yet: the public share pages are read-only, but the API
+> itself is open. Add authentication before running a real tournament.
+
+## Android
+
+The `frontend/` folder includes a Capacitor shell for an Android app. See
+[`frontend/ANDROID.md`](frontend/ANDROID.md).
+
+## Project layout
+
 ```
-
-### 3. Python AI service (port 8000, optional)
-
-```powershell
-cd python-ai-service
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-Copy-Item .env.example .env
-python -m training.train --output artifacts/models.joblib --samples 20000
-python -m uvicorn app.main:app --env-file .env --host 127.0.0.1 --port 8000
+backend/
+  lib/        scoring engine, points table, stats (pure functions)
+  services/   match lifecycle + data shaping
+  routes/     REST endpoints under /api
+  db/         MongoDB connection and the mock-data seed
+  tests/      node:test suites (engine + API on in-memory MongoDB)
+frontend/src/
+  pages/      admin screens and public share pages
+  views/      screens shared by admin and public pages
+  components/ layout, cards, tables, shadcn/ui primitives
+  lib/        API client, types, formatting
 ```
-
-The Node backend proxies AI requests server-side; the browser only talks to
-port 3000 (`POST /api/ai/win-probability`, `POST /api/ai/first-innings-score`).
-
-## Key API endpoints
-
-- `GET /api/health`
-- `GET|POST /api/teams`, `GET|PATCH|DELETE /api/teams/:id`
-- `GET|POST /api/players`, `GET|PATCH|DELETE /api/players/:id`
-- `GET|POST /api/tournaments`, `GET|PATCH|DELETE /api/tournaments/:id`
-- `GET|POST /api/matches`, `GET|PATCH|DELETE /api/matches/:id`
-- `GET /api/matches/:id/scorecard`
-- `GET|POST /api/scoring-events` (append-only; PATCH/DELETE return 405)
-- `POST /api/ai/win-probability`, `POST /api/ai/first-innings-score`
-
-Errors are always `{ "error": { "message": "..." } }`. Full schema and scoring
-model details are in [`backend/README.md`](backend/README.md).
-
-## Android app
-
-```powershell
-cd frontend
-npm run android:apk     # build + cap sync + gradlew assembleDebug
-```
-
-The debug APK lands at
-`frontend\android\app\build\outputs\apk\debug\app-debug.apk`. Setup
-requirements, device testing checklist, API URL handling on devices, and
-release signing are covered in [`frontend/ANDROID.md`](frontend/ANDROID.md).
-
-## Documentation
-
-- [`backend/README.md`](backend/README.md) — database choice, schema,
-  migrations, endpoints, persistence verification.
-- [`frontend/ANDROID.md`](frontend/ANDROID.md) — Capacitor/Android build,
-  testing, signing, and troubleshooting.
-- [`python-ai-service/README.md`](python-ai-service/README.md) — models,
-  synthetic-data limitations, training and API usage.
-
-## Notes
-
-- Keep secrets in environment variables; never commit `.env` or keystore files.
-- Scoring events are immutable (database triggers reject updates and deletes)
-  so the scoring record stays auditable.
-- There is no correction-event workflow yet; treat event data as final.

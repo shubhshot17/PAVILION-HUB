@@ -1,64 +1,134 @@
+import { randomBytes } from 'node:crypto'
 import { Router } from 'express'
-import { createResourceRouter } from './resourceRoutes.js'
-import controller from '../controllers/tournamentsController.js'
-import { fixtures, registrations } from '../models/tournament.js'
-import { computeStandings, computeBracket } from '../lib/pointsEngine.js'
+import { db, newId } from '../db/mongo.js'
 import { HttpError } from '../middleware/errorHandler.js'
-import {
-  validateFixture,
-  validateRegistration,
-} from '../controllers/validators.js'
+import { computeStandings } from '../lib/standings.js'
+import { aggregateStats, leaderboards } from '../lib/stats.js'
+import { body, defined, integer, isoDate, notFound, text } from '../lib/validate.js'
+import { computeMatches, describePlayer, summarize, teamApi, tournamentApi } from '../services/context.js'
 
-const router = createResourceRouter(controller)
+const router = Router()
 
-// ── Standings (computed live from DB) ────────────────────────
-router.get('/:id/standings', (req, res) => {
-  const rows = computeStandings(req.params.id)
-  res.status(200).json(rows)
+/** Short, unguessable code used in the public share link (/t/<code>). */
+export const shareCode = () => randomBytes(6).toString('base64url').replace(/[-_]/g, 'x').slice(0, 8).toLowerCase()
+
+function tournamentFields(data, partial) {
+  return defined({
+    name: text(data, 'name', { required: !partial, max: 80 }),
+    season: text(data, 'season', { max: 20 }),
+    city: text(data, 'city'),
+    ground: text(data, 'ground'),
+    overs: integer(data, 'overs', 1, 50) ?? (partial ? undefined : 20),
+    startDate: isoDate(data, 'startDate'),
+    endDate: isoDate(data, 'endDate'),
+    organizer: text(data, 'organizer'),
+  })
+}
+
+async function teamIdsFrom(data) {
+  if (data.teamIds === undefined) return undefined
+  if (!Array.isArray(data.teamIds)) throw new HttpError(400, 'teamIds must be a list')
+  const ids = [...new Set(data.teamIds.map(String))]
+  if (await db().teams.countDocuments({ _id: { $in: ids } }) !== ids.length) {
+    throw new HttpError(400, 'Every team must exist')
+  }
+  return ids
+}
+
+export async function tournamentDetail(tournament) {
+  const [teams, matches, { computed, playersById, teamsById }] = await Promise.all([
+    db().teams.find({ _id: { $in: tournament.teamIds ?? [] } }).sort({ name: 1 }).toArray(),
+    db().matches.find({ tournamentId: tournament._id }).sort({ date: 1 }).toArray(),
+    computeMatches({ tournamentId: tournament._id }),
+  ])
+  const apiTeams = teams.map(teamApi)
+  return {
+    ...tournamentApi(tournament),
+    teams: apiTeams,
+    matches: await summarize(matches),
+    standings: computeStandings(apiTeams, matches),
+    leaders: leaderboards(aggregateStats(computed), describePlayer(playersById, teamsById)),
+  }
+}
+
+router.get('/', async (_req, res) => {
+  const [tournaments, counts] = await Promise.all([
+    db().tournaments.find().sort({ createdAt: -1 }).toArray(),
+    db().matches.aggregate([{
+      $group: {
+        _id: '$tournamentId',
+        matches: { $sum: 1 },
+        live: { $sum: { $cond: [{ $eq: ['$status', 'live'] }, 1, 0] } },
+      },
+    }]).toArray(),
+  ])
+  const countsById = new Map(counts.map((row) => [row._id, row]))
+  res.json(tournaments.map((tournament) => ({
+    ...tournamentApi(tournament),
+    teamCount: tournament.teamIds?.length ?? 0,
+    matchCount: countsById.get(tournament._id)?.matches ?? 0,
+    liveCount: countsById.get(tournament._id)?.live ?? 0,
+  })))
 })
 
-// ── Knockout bracket ──────────────────────────────────────────
-router.get('/:id/bracket', (req, res) => {
-  const rounds = computeBracket(req.params.id)
-  res.status(200).json(rounds)
+router.post('/', async (req, res) => {
+  const data = body(req)
+  const tournament = {
+    _id: newId(),
+    ...tournamentFields(data, false),
+    teamIds: await teamIdsFrom(data) ?? [],
+    shareCode: shareCode(),
+    createdAt: new Date().toISOString(),
+  }
+  await db().tournaments.insertOne(tournament)
+  res.status(201).json(await tournamentDetail(tournament))
 })
 
-// ── Fixtures ──────────────────────────────────────────────────
-router.get('/:id/fixtures', (req, res) => {
-  res.status(200).json(fixtures.list(req.params.id))
+/** Public read-only view used by the share link. */
+router.get('/code/:code', async (req, res) => {
+  const tournament = notFound(await db().tournaments.findOne({ shareCode: req.params.code }), 'Tournament')
+  res.json(await tournamentDetail(tournament))
 })
 
-router.post('/:id/fixtures', (req, res) => {
-  validateFixture(req.body)
-  const fixture = fixtures.create({ ...req.body, tournamentId: req.params.id })
-  res.status(201).json(fixture)
+router.get('/:id', async (req, res) => {
+  res.json(await tournamentDetail(notFound(await db().tournaments.findOne({ _id: req.params.id }), 'Tournament')))
 })
 
-router.patch('/:id/fixtures/:fid', (req, res) => {
-  const updated = fixtures.update(req.params.fid, req.body)
-  if (!updated) throw new HttpError(404, 'Fixture not found')
-  res.status(200).json(updated)
+router.patch('/:id', async (req, res) => {
+  notFound(await db().tournaments.findOne({ _id: req.params.id }), 'Tournament')
+  const data = body(req)
+  await db().tournaments.updateOne({ _id: req.params.id }, {
+    $set: defined({ ...tournamentFields(data, true), teamIds: await teamIdsFrom(data) }),
+  })
+  res.json(await tournamentDetail(await db().tournaments.findOne({ _id: req.params.id })))
 })
 
-router.delete('/:id/fixtures/:fid', (req, res) => {
-  if (!fixtures.remove(req.params.fid)) throw new HttpError(404, 'Fixture not found')
+router.delete('/:id', async (req, res) => {
+  notFound(await db().tournaments.findOne({ _id: req.params.id }), 'Tournament')
+  const matchIds = (await db().matches.find({ tournamentId: req.params.id }).project({ _id: 1 }).toArray())
+    .map((match) => match._id)
+  await db().balls.deleteMany({ matchId: { $in: matchIds } })
+  await db().matches.deleteMany({ tournamentId: req.params.id })
+  await db().tournaments.deleteOne({ _id: req.params.id })
   res.status(204).end()
 })
 
-// ── Registrations ─────────────────────────────────────────────
-router.get('/:id/registrations', (req, res) => {
-  res.status(200).json(registrations.list(req.params.id))
+router.post('/:id/teams', async (req, res) => {
+  notFound(await db().tournaments.findOne({ _id: req.params.id }), 'Tournament')
+  const teamId = text(body(req), 'teamId', { required: true, max: 40 })
+  notFound(await db().teams.findOne({ _id: teamId }), 'Team')
+  await db().tournaments.updateOne({ _id: req.params.id }, { $addToSet: { teamIds: teamId } })
+  res.json(await tournamentDetail(await db().tournaments.findOne({ _id: req.params.id })))
 })
 
-router.post('/:id/registrations', (req, res) => {
-  validateRegistration(req.body)
-  const reg = registrations.register(req.params.id, req.body.teamId)
-  res.status(201).json(reg)
-})
-
-router.delete('/:id/registrations/:rid', (req, res) => {
-  if (!registrations.withdraw(req.params.rid)) throw new HttpError(404, 'Registration not found')
-  res.status(204).end()
+router.delete('/:id/teams/:teamId', async (req, res) => {
+  notFound(await db().tournaments.findOne({ _id: req.params.id }), 'Tournament')
+  const { teamId } = req.params
+  if (await db().matches.countDocuments({ tournamentId: req.params.id, $or: [{ teamAId: teamId }, { teamBId: teamId }] })) {
+    throw new HttpError(409, 'This team has matches in the tournament')
+  }
+  await db().tournaments.updateOne({ _id: req.params.id }, { $pull: { teamIds: teamId } })
+  res.json(await tournamentDetail(await db().tournaments.findOne({ _id: req.params.id })))
 })
 
 export default router
