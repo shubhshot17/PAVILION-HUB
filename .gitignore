@@ -179,3 +179,9 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Local Mongo runtime & database storage
+.mongo-data/
+
+# VS Code workspace state
+.vscode/
