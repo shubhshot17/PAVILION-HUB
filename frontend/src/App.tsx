@@ -4,6 +4,7 @@ import { EmptyState } from '@/components/common'
 import { PublicLayout } from '@/components/public-layout'
 import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
+import { AuthProvider } from '@/lib/auth-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { HomePage } from '@/pages/home'
 import { LoginPage } from '@/pages/login'
@@ -27,6 +28,8 @@ function NotFound() {
 
 export default function App() {
   return (
+    <AuthProvider>
+    <AuthProvider>
     <TooltipProvider>
       <BrowserRouter>
         <Routes>
@@ -57,5 +60,6 @@ export default function App() {
       </BrowserRouter>
       <Toaster position="top-center" richColors />
     </TooltipProvider>
+    </AuthProvider>
   )
 }

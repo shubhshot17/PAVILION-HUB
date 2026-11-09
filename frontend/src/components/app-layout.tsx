@@ -1,11 +1,13 @@
-import { Link, NavLink, Outlet, useLocation } from 'react-router'
-import { BarChart3, CalendarDays, Home, Plus, Shield, Trophy } from 'lucide-react'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { BarChart3, CalendarDays, Home, LogIn, LogOut, Plus, Shield, Trophy, UserRound } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider,
   SidebarRail, SidebarTrigger, useSidebar,
 } from '@/components/ui/sidebar'
+import { useAuth } from '@/lib/auth-context'
 
 const NAV = [
   { to: '/', label: 'Home', icon: Home, end: true },
@@ -57,6 +59,39 @@ function NavItems() {
   )
 }
 
+function AccountButtons({ setOpenMobile }: { setOpenMobile: (open: boolean) => void }) {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+
+  if (!user) {
+    return (
+      <Button asChild variant="outline" className="w-full group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0">
+        <Link to="/login" onClick={() => setOpenMobile(false)}>
+          <LogIn />
+          <span className="group-data-[collapsible=icon]:hidden">Sign in</span>
+        </Link>
+      </Button>
+    )
+  }
+
+  return (
+    <Button
+      variant="outline"
+      className="w-full justify-start group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
+      onClick={async () => {
+        setOpenMobile(false)
+        await logout()
+        toast('Signed out')
+        navigate('/')
+      }}
+    >
+      <UserRound className="shrink-0" />
+      <span className="min-w-0 truncate group-data-[collapsible=icon]:hidden">{user.name} · Sign out</span>
+      <LogOut className="shrink-0 group-data-[collapsible=icon]:hidden" />
+    </Button>
+  )
+}
+
 function AppSidebar() {
   const { setOpenMobile } = useSidebar()
   return (
@@ -73,7 +108,8 @@ function AppSidebar() {
           <SidebarGroupContent><NavItems /></SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-3">
+      <SidebarFooter className="grid gap-2 p-3">
+        <AccountButtons setOpenMobile={setOpenMobile} />
         <Button asChild className="w-full shadow-sm group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0">
           <Link to="/matches/new" onClick={() => setOpenMobile(false)}>
             <Plus />

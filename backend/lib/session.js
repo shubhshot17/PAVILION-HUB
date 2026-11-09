@@ -8,7 +8,8 @@ import { HttpError } from "../middleware/errorHandler.js";
  * time; no external dependency needed.
  */
 
-const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+const REMEMBER_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+const DEFAULT_TTL_SECONDS = 60 * 60 * 24; // 1 day
 
 function secret() {
   const value = config.sessionSecret;
@@ -23,11 +24,11 @@ function secret() {
 
 const b64url = (buffer) => Buffer.from(buffer).toString("base64url");
 
-export function signSession(userId) {
+export function signSession(userId, ttlSeconds = DEFAULT_TTL_SECONDS) {
   const payload = b64url(
     JSON.stringify({
       userId,
-      exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS,
+      exp: Math.floor(Date.now() / 1000) + ttlSeconds,
     }),
   );
   const signature = b64url(
@@ -64,12 +65,17 @@ export function readSession(req) {
 
 export const COOKIE_NAME = "ph_session";
 
-export function setSessionCookie(res, token) {
+/**
+ * Sets the session cookie. Without `remember` the cookie is a browser-session
+ * cookie (cleared when the browser closes); with it, it persists 30 days.
+ */
+export function setSessionCookie(res, token, remember = true) {
+  const maxAge = remember ? REMEMBER_TTL_SECONDS * 1000 : undefined;
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: config.isProduction,
-    maxAge: TOKEN_TTL_SECONDS * 1000,
+    ...(maxAge ? { maxAge } : {}),
     path: "/",
   });
 }

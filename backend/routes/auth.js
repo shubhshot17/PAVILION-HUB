@@ -16,6 +16,9 @@ import {
 
 const router = Router();
 
+const THIRTY_DAYS = 60 * 60 * 24 * 30;
+const ONE_DAY = 60 * 60 * 24;
+
 /** POST /api/auth/register — create an account and start a session. */
 router.post("/register", async (req, res) => {
   const data = body(req);
@@ -23,8 +26,7 @@ router.post("/register", async (req, res) => {
     throw new HttpError(400, "Passwords do not match");
   }
   const user = await registerUser(data);
-  const token = signSession(user._id);
-  setSessionCookie(res, token);
+  setSessionCookie(res, signSession(user._id, THIRTY_DAYS));
   res.status(201).json({ user });
 });
 
@@ -33,7 +35,8 @@ router.post("/login", async (req, res) => {
   const data = body(req);
   const user = await verifyUser(data.email, data.password);
   if (!user) throw new HttpError(401, "Incorrect email or password");
-  setSessionCookie(res, signSession(user._id));
+  const ttl = data.remember ? THIRTY_DAYS : ONE_DAY;
+  setSessionCookie(res, signSession(user._id, ttl), data.remember);
   res.json({ user: userApi(user) });
 });
 

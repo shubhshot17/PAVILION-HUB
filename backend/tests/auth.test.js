@@ -102,6 +102,25 @@ test("registered user can log in and a wrong password is rejected", async () => 
   assert.equal(bad.status, 401);
 });
 
+test("remember me persists the cookie; without it it is a browser-session cookie", async () => {
+  const remembered = await call("POST", "/auth/login", {
+    email: "rohan@example.com",
+    password: "supersecret1",
+    remember: true,
+  });
+  assert.match(remembered.setCookie, /Expires|Max-Age/);
+
+  const notRemembered = await call("POST", "/auth/login", {
+    email: "rohan@example.com",
+    password: "supersecret1",
+    remember: false,
+  });
+  assert.ok(!/Expires|Max-Age/i.test(notRemembered.setCookie));
+
+  const tampered = await call("GET", "/auth/me", undefined, "ph_session=abc.def");
+  assert.equal(tampered.status, 401);
+});
+
 test("/auth/me returns the session user with the session cookie", async () => {
   const login = await call("POST", "/auth/login", {
     email: "rohan@example.com",

@@ -51,7 +51,7 @@ const del = <T = void>(path: string) => request<T>('DELETE', path)
 export const api = {
   register: (data: { name: string; email: string; password: string; confirmPassword: string }) =>
     post<{ user: User }>('/auth/register', data),
-  login: (data: { email: string; password: string }) => post<{ user: User }>('/auth/login', data),
+  login: (data: { email: string; password: string; remember?: boolean }) => post<{ user: User }>('/auth/login', data),
   logout: () => post<void>('/auth/logout'),
   me: () => get<{ user: User }>('/auth/me'),
 
