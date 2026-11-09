@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { HomePage } from '@/pages/home'
+import { LoginPage } from '@/pages/login'
+import { RegisterPage } from '@/pages/register'
 import { MatchPage } from '@/pages/match'
 import { MatchesPage } from '@/pages/matches'
 import { NewMatchPage } from '@/pages/new-match'
@@ -41,6 +43,8 @@ export default function App() {
             <Route path="teams/:id" element={<TeamPage />} />
             <Route path="players/:id" element={<PlayerPage />} />
             <Route path="stats" element={<StatsPage />} />
+            <Route path="login" element={<LoginPage />} />
+            <Route path="register" element={<RegisterPage />} />
             <Route path="*" element={<NotFound />} />
           </Route>
           <Route path="t/:code" element={<PublicLayout />}>

@@ -1,10 +1,12 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import cors from 'cors'
+import cookieParser from 'cookie-parser'
 import express from 'express'
 import { config } from './config.js'
 import { db } from './db/mongo.js'
 import { notFound, errorHandler } from './middleware/errorHandler.js'
+import authRouter from './routes/auth.js'
 import matchesRouter from './routes/matches.js'
 import overviewRouter from './routes/overview.js'
 import playersRouter from './routes/players.js'
@@ -18,12 +20,14 @@ app.use(cors({
   origin: (origin, callback) => callback(null, origin === config.frontendOrigin),
 }))
 app.use(express.json({ limit: '1mb' }))
+app.use(cookieParser())
 
 app.get('/api/health', async (_req, res) => {
   await db().raw.command({ ping: 1 })
   res.status(200).json({ status: 'ok' })
 })
 
+app.use('/api/auth', authRouter)
 app.use('/api', overviewRouter)
 app.use('/api/tournaments', tournamentsRouter)
 app.use('/api/teams', teamsRouter)

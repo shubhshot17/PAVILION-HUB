@@ -23,6 +23,9 @@ try {
 const mongodbUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017'
 const mongodbDb = process.env.MONGODB_DB || 'pavilion_hub'
 
+// Secret for signing session cookies; required in production.
+const sessionSecret = process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? null : 'pavilion-hub-dev-secret')
+
 // Built frontend (frontend/dist). When present, the API also serves the web app,
 // so production is a single service on one address.
 const frontendDist = fileURLToPath(new URL('../frontend/dist/', import.meta.url))
@@ -32,5 +35,7 @@ export const config = {
   frontendOrigin,
   mongodbUri,
   mongodbDb,
+  sessionSecret,
+  isProduction: process.env.NODE_ENV === 'production',
   frontendDist,
 }

@@ -12,6 +12,12 @@ export const PLAYER_ROLES: { value: PlayerRole; label: string }[] = [
   { value: 'wicket-keeper', label: 'Wicket-keeper' },
 ]
 
+export interface User {
+  id: string
+  name: string
+  email: string
+}
+
 export interface Team {
   id: string
   name: string

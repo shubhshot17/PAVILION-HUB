@@ -18,6 +18,7 @@ export async function connectDatabase(uri = config.mongodbUri, name = config.mon
     db().balls.createIndex({ matchId: 1, seq: 1 }, { unique: true }),
     db().balls.createIndex({ strikerId: 1 }),
     db().balls.createIndex({ bowlerId: 1 }),
+    db().users.createIndex({ email: 1 }, { unique: true, collation: { locale: 'en', strength: 2 } }),
   ])
   return database
 }
@@ -40,6 +41,7 @@ export function db() {
     players: database.collection('players'),
     matches: database.collection('matches'),
     balls: database.collection('balls'),
+    users: database.collection('users'),
   }
 }
 

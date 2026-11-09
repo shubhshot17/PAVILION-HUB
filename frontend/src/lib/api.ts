@@ -30,6 +30,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       method,
       headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
+      credentials: 'include',
     })
   } catch {
     throw new ApiError(0, 'Cannot reach the server. Is the backend running?')
@@ -48,6 +49,12 @@ const patch = <T>(path: string, body: unknown) => request<T>('PATCH', path, body
 const del = <T = void>(path: string) => request<T>('DELETE', path)
 
 export const api = {
+  register: (data: { name: string; email: string; password: string; confirmPassword: string }) =>
+    post<{ user: User }>('/auth/register', data),
+  login: (data: { email: string; password: string }) => post<{ user: User }>('/auth/login', data),
+  logout: () => post<void>('/auth/logout'),
+  me: () => get<{ user: User }>('/auth/me'),
+
   dashboard: () => get<Dashboard>('/dashboard'),
   leaders: () => get<Leaders>('/stats'),
 
