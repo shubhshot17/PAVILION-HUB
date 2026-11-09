@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
 import { ArrowLeft, ArrowLeftRight, ClipboardList, MoreVertical, Share2, Trophy, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -33,28 +33,41 @@ const WICKETS: { value: WicketType; label: string }[] = [
 
 const buzz = () => navigator.vibrate?.(12)
 
+/** Undo the last ball of a match, updating state and surfacing errors via toast. */
+async function undoLastBall(matchId: string, setMatch: (m: MatchDetail) => void) {
+  try {
+    setMatch(await api.undoBall(matchId))
+    toast('Last ball undone')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Could not undo')
+  }
+}
+
 /** Everything the scorer needs, derived once from the match. */
 function useScoringContext(match: MatchDetail) {
-  const live = match.live!
-  const innings = match.innings[live.inningsIndex]
-  const team = (id: string) => (id === match.teamA.id ? match.teamA : match.teamB)
-  const xi = (teamId: string) => (match.squads[teamId] ?? []).filter((p) => match.playingXI?.[teamId]?.includes(p.id))
-  const battingTeam = team(innings.battingTeamId)
-  const bowlingTeam = team(innings.bowlingTeamId)
-  const outIds = new Set(innings.batting.filter((e) => e.out).map((e) => e.playerId))
-  const atCrease = new Set([live.strikerId, live.nonStrikerId].filter(Boolean) as string[])
-  return {
-    live,
-    innings,
-    battingTeam,
-    bowlingTeam,
-    battingXI: xi(battingTeam.id),
-    bowlingXI: xi(bowlingTeam.id),
-    availableBatters: xi(battingTeam.id).filter((p) => !outIds.has(p.id) && !atCrease.has(p.id)),
-    batter: (id: string | null) => innings.batting.find((e) => e.playerId === id),
-    bowlerFigures: (id: string | null) => innings.bowling.find((e) => e.playerId === id),
-    name: (id: string | null) => [...xi(match.teamA.id), ...xi(match.teamB.id)].find((p) => p.id === id)?.name ?? '—',
-  }
+  return useMemo(() => {
+    const live = match.live ?? null
+    if (!live) throw new Error('Scoring context used for a match that is not live')
+    const innings = match.innings[live.inningsIndex] ?? match.innings[0]
+    const team = (id: string) => (id === match.teamA.id ? match.teamA : match.teamB)
+    const xi = (teamId: string) => (match.squads[teamId] ?? []).filter((p) => match.playingXI?.[teamId]?.includes(p.id))
+    const battingTeam = team(innings.battingTeamId)
+    const bowlingTeam = team(innings.bowlingTeamId)
+    const outIds = new Set(innings.batting.filter((e) => e.out).map((e) => e.playerId))
+    const atCrease = new Set([live.strikerId, live.nonStrikerId].filter(Boolean) as string[])
+    return {
+      live,
+      innings,
+      battingTeam,
+      bowlingTeam,
+      battingXI: xi(battingTeam.id),
+      bowlingXI: xi(bowlingTeam.id),
+      availableBatters: xi(battingTeam.id).filter((p) => !outIds.has(p.id) && !atCrease.has(p.id)),
+      batter: (id: string | null) => innings.batting.find((e) => e.playerId === id),
+      bowlerFigures: (id: string | null) => innings.bowling.find((e) => e.playerId === id),
+      name: (id: string | null) => [...xi(match.teamA.id), ...xi(match.teamB.id)].find((p) => p.id === id)?.name ?? '—',
+    }
+  }, [match])
 }
 
 function PickerDialog({ open, title, description, players, onPick, detail, footer }: {
@@ -400,14 +413,7 @@ function Finished({ match, setMatch }: { match: MatchDetail; setMatch: (m: Match
             message={`${match.result?.text} — full scorecard:`} trigger={<Button variant="outline"><Share2 /> Share result</Button>} />
         )}
         {match.status === 'completed' && (
-          <Button variant="ghost" onClick={async () => {
-            try {
-              setMatch(await api.undoBall(match.id))
-              toast('Last ball undone')
-            } catch (error) {
-              toast.error(error instanceof Error ? error.message : 'Could not undo')
-            }
-          }}><Undo2 /> Undo last ball</Button>
+          <Button variant="ghost" onClick={() => void undoLastBall(match.id, setMatch)}><Undo2 /> Undo last ball</Button>
         )}
       </div>
     </div>
